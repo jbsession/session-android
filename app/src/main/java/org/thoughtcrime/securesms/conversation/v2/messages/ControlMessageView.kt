@@ -10,6 +10,7 @@ import android.util.AttributeSet
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.LinearLayout
+import androidx.compose.runtime.Composable
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.drawable.toBitmap
 import androidx.core.view.isGone
@@ -25,6 +26,7 @@ import org.session.libsession.utilities.StringSubstitutionConstants.APP_NAME_KEY
 import org.session.libsession.utilities.StringSubstitutionConstants.NAME_KEY
 import org.session.libsession.utilities.TextSecurePreferences
 import org.session.libsession.utilities.TextSecurePreferences.Companion.CALL_NOTIFICATIONS_ENABLED
+import org.session.libsession.utilities.ThemeUtil
 import org.session.libsession.utilities.getColorFromAttr
 import org.session.libsession.utilities.isGroup
 import org.session.libsession.utilities.isGroupOrCommunity
@@ -40,6 +42,7 @@ import org.thoughtcrime.securesms.showSessionDialog
 import org.thoughtcrime.securesms.ui.findActivity
 import org.thoughtcrime.securesms.ui.getSubbedCharSequence
 import org.thoughtcrime.securesms.ui.getSubbedString
+import org.thoughtcrime.securesms.ui.theme.LocalColors
 import org.thoughtcrime.securesms.util.DateUtils
 import javax.inject.Inject
 
@@ -84,6 +87,11 @@ class ControlMessageView : LinearLayout {
         binding.expirationTimerView.isGone = true
         binding.followSetting.isGone = true
         var messageBody: CharSequence = message.getDisplayBody(context)
+
+        val isLight = ThemeUtil.isLightTheme(context)
+        if(isLight){
+            binding.followSetting.setTextColor(context.getColorFromAttr(android.R.attr.textColorPrimary))
+        }
 
         binding.root.contentDescription = null
         binding.textView.text = messageBody
