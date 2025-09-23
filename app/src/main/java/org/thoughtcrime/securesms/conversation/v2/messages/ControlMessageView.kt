@@ -88,11 +88,6 @@ class ControlMessageView : LinearLayout {
         binding.followSetting.isGone = true
         var messageBody: CharSequence = message.getDisplayBody(context)
 
-        val isLight = ThemeUtil.isLightTheme(context)
-        if(isLight){
-            binding.followSetting.setTextColor(context.getColorFromAttr(android.R.attr.textColorPrimary))
-        }
-
         binding.root.contentDescription = null
         binding.textView.text = messageBody
         val messageContent = message.messageContent
