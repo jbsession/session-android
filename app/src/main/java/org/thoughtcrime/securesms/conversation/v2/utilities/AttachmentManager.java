@@ -370,8 +370,7 @@ public class AttachmentManager {
                 Permissions.with(activity)
                         .request(
                                 Manifest.permission.READ_MEDIA_IMAGES,
-                                Manifest.permission.READ_MEDIA_VIDEO,
-                                Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+                                Manifest.permission.READ_MEDIA_VIDEO
                         )
                         .onAnyResult(() -> {
                             if (onAnyResult != null) onAnyResult.run();
