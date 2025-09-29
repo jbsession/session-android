@@ -387,8 +387,6 @@ public class AttachmentManager {
 
     public static boolean shouldShowManagePhoto(@NonNull Activity activity){
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE){
-            boolean x = hasFullAccess(activity);
-            boolean y = hasPartialAccess(activity);
             return !hasFullAccess(activity) && hasPartialAccess(activity);
         }else{
             // No partial access for <= API 33
