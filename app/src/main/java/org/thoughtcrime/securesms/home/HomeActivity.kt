@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.view.ViewGroup.MarginLayoutParams
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.viewModels
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -231,6 +232,21 @@ class HomeActivity : ScreenLockActionBarActivity(),
             homeViewModel.onSearchClicked()
         }
         binding.sessionToolbar.disableClipping()
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                // Existing search handling
+                val searchHandled = homeViewModel.isSearchOpen.value &&
+                        binding.globalSearchInputLayout.handleBackPressed()
+                if (searchHandled) return
+
+                if (!homeViewModel.onBackPressed()) {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                    isEnabled = true
+                }
+            }
+        })
 
         lifecycleScope.launch {
             homeViewModel.shouldShowCurrentUserProBadge
@@ -550,16 +566,6 @@ class HomeActivity : ScreenLockActionBarActivity(),
     // endregion
 
     // region Interaction
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
-        if (homeViewModel.isSearchOpen.value && binding.globalSearchInputLayout.handleBackPressed()) {
-            return
-        }
-
-        if (!homeViewModel.onBackPressed()) {
-            super.onBackPressed()
-        }
-    }
 
     override fun onConversationClick(thread: ThreadRecord) {
         push(ConversationActivityV2.createIntent(this, address = thread.recipient.address as Address.Conversable))

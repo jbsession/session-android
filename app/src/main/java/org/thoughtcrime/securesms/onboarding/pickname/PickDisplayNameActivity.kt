@@ -40,6 +40,7 @@ class PickDisplayNameActivity : BaseActionBarActivity() {
 
         setComposeContent { DisplayNameScreen(viewModel) }
 
+        // Predictive back-firendly
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (!viewModel.onBackPressed()) {
@@ -47,7 +48,6 @@ class PickDisplayNameActivity : BaseActionBarActivity() {
                 }
             }
         })
-
 
         lifecycleScope.launch(Dispatchers.Main) {
             viewModel.events.collect {
@@ -69,14 +69,6 @@ class PickDisplayNameActivity : BaseActionBarActivity() {
             quit = { viewModel.dismissDialog(); finish() }
         )
     }
-
-//    @Deprecated("Deprecated in Java")
-//    override fun onBackPressed() {
-//        if (viewModel.onBackPressed()) return
-//
-//        @Suppress("DEPRECATION")
-//        super.onBackPressed()
-//    }
 }
 
 fun Context.startPickDisplayNameActivity(loadFailed: Boolean = false, flags: Int = 0) {
