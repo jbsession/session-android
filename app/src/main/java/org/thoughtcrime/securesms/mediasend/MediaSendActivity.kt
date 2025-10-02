@@ -13,6 +13,7 @@ import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
 import android.view.animation.ScaleAnimation
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.viewModels
 import androidx.core.content.ContentProviderCompat.requireContext
 import androidx.core.view.ViewGroupCompat
@@ -129,18 +130,19 @@ class MediaSendActivity : ScreenLockActionBarActivity(), MediaPickerFolderFragme
                 navigateToCamera()
             }
         }
-    }
 
-    override fun onBackPressed() {
-        super.onBackPressed()
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (intent.getBooleanExtra(KEY_IS_CAMERA, false) &&
+                    supportFragmentManager.backStackEntryCount == 0) {
+                    viewModel.onImageCaptureUndo(this@MediaSendActivity)
+                }
 
-        if (intent.getBooleanExtra(
-                KEY_IS_CAMERA,
-                false
-            ) && supportFragmentManager.backStackEntryCount == 0
-        ) {
-            viewModel.onImageCaptureUndo(this)
-        }
+                isEnabled = false
+                onBackPressedDispatcher.onBackPressed()
+                isEnabled = true
+            }
+        })
     }
 
     override fun onRequestPermissionsResult(
