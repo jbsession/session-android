@@ -44,6 +44,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
 import androidx.core.view.updateLayoutParams
+import androidx.core.view.updatePadding
 import androidx.fragment.app.DialogFragment
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.Observer
@@ -119,7 +120,6 @@ import org.session.libsignal.utilities.hexEncodedPrivateKey
 import org.thoughtcrime.securesms.ApplicationContext
 import org.thoughtcrime.securesms.FullComposeActivity.Companion.applyCommonPropertiesForCompose
 import org.thoughtcrime.securesms.ScreenLockActionBarActivity
-import org.thoughtcrime.securesms.attachments.ScreenshotObserver
 import org.thoughtcrime.securesms.audio.AudioRecorderHandle
 import org.thoughtcrime.securesms.audio.recordAudio
 import org.thoughtcrime.securesms.components.TypingStatusSender
@@ -269,13 +269,6 @@ class ConversationActivityV2 : ScreenLockActionBarActivity(), InputBarDelegate,
     override val applyAutoScrimForNavigationBar: Boolean
         get() = false
 
-    private val screenshotObserver by lazy {
-        ScreenshotObserver(this, Handler(Looper.getMainLooper())) {
-            // post screenshot message
-            sendScreenshotNotification()
-        }
-    }
-
     private val screenWidth = Resources.getSystem().displayMetrics.widthPixels
     private val linkPreviewViewModel: LinkPreviewViewModel by lazy {
         ViewModelProvider(this, LinkPreviewViewModel.Factory(LinkPreviewRepository()))
@@ -283,9 +276,22 @@ class ConversationActivityV2 : ScreenLockActionBarActivity(), InputBarDelegate,
     }
 
     private val address: Address.Conversable by lazy {
-        requireNotNull(IntentCompat.getParcelableExtra(intent, ADDRESS, Address.Conversable::class.java)) {
-            "Address must be provided in the intent extras"
+        val fromExtras =
+            IntentCompat.getParcelableExtra(intent, ADDRESS, Address.Conversable::class.java)
+        if (fromExtras != null) {
+            return@lazy fromExtras
         }
+
+        // Fallback: parse from URI
+        val serialized = intent.data?.getQueryParameter(ADDRESS)
+        if (!serialized.isNullOrEmpty()) {
+            val parsed = fromSerialized(serialized)
+            if (parsed is Address.Conversable) {
+                return@lazy parsed
+            }
+        }
+
+        throw IllegalArgumentException("Address must be provided in the intent extras or URI")
     }
 
     private val viewModel: ConversationViewModel by viewModels(extrasProducer = {
@@ -631,6 +637,8 @@ class ConversationActivityV2 : ScreenLockActionBarActivity(), InputBarDelegate,
             val navInsets = windowInsets.getInsets(WindowInsetsCompat.Type.navigationBars())
             val imeInsets = windowInsets.getInsets(WindowInsetsCompat.Type.ime())
 
+            val systemBarsInsets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+
             val keyboardVisible = imeInsets.bottom > 0
 
             if (keyboardVisible != isKeyboardVisible) {
@@ -647,6 +655,11 @@ class ConversationActivityV2 : ScreenLockActionBarActivity(), InputBarDelegate,
             binding.bottomSpacer.updateLayoutParams<LayoutParams> {
                 height = if (keyboardVisible) imeInsets.bottom else navInsets.bottom
             }
+
+            binding.contentContainer.updatePadding(
+                left = systemBarsInsets.left,
+                right = systemBarsInsets.right
+            )
 
             windowInsets
         }
@@ -720,18 +733,11 @@ class ConversationActivityV2 : ScreenLockActionBarActivity(), InputBarDelegate,
     override fun onResume() {
         super.onResume()
         ApplicationContext.getInstance(this).messageNotifier.setVisibleThread(viewModel.threadId)
-
-        contentResolver.registerContentObserver(
-            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-            true,
-            screenshotObserver
-        )
     }
 
     override fun onPause() {
         super.onPause()
         ApplicationContext.getInstance(this).messageNotifier.setVisibleThread(-1)
-        contentResolver.unregisterContentObserver(screenshotObserver)
     }
 
     override fun getSystemService(name: String): Any? {
@@ -2639,14 +2645,6 @@ class ConversationActivityV2 : ScreenLockActionBarActivity(), InputBarDelegate,
 
     override fun destroyActionMode() {
         this.actionMode = null
-    }
-
-    private fun sendScreenshotNotification() {
-        val recipient = viewModel.recipient
-        if (recipient.isGroupOrCommunityRecipient) return
-        val kind = DataExtractionNotification.Kind.Screenshot()
-        val message = DataExtractionNotification(kind)
-        MessageSender.send(message, recipient.address)
     }
 
     private fun sendMediaSavedNotification() {

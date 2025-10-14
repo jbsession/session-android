@@ -2,7 +2,6 @@ package org.thoughtcrime.securesms.onboarding.messagenotifications
 
 import android.R.attr.checked
 import android.R.attr.onClick
-import android.content.res.Configuration
 import androidx.annotation.StringRes
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -10,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -19,7 +19,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
@@ -60,93 +59,65 @@ internal fun MessageNotificationsScreen(
         return
     }
 
-    if (state.showingBackWarningDialogText != null)  {
-        OnboardingBackPressAlertDialog(dismissDialog,
+    if (state.showingBackWarningDialogText != null) {
+        OnboardingBackPressAlertDialog(
+            dismissDialog,
             textId = state.showingBackWarningDialogText,
             quit = quit
         )
     }
 
-    Column {
-        Spacer(Modifier.weight(1f))
-        Column(modifier = Modifier.padding(horizontal = LocalDimensions.current.mediumSpacing)) {
-            Text(stringResource(R.string.notificationsMessage), style = LocalType.current.h4)
-            Spacer(Modifier.height(LocalDimensions.current.smallSpacing))
-            Text(
-                Phrase.from(stringResource(R.string.onboardingMessageNotificationExplanation))
-                    .put(APP_NAME_KEY, stringResource(R.string.app_name))
-                    .format().toString(),
-                style = LocalType.current.base
-            )
-            Spacer(Modifier.height(LocalDimensions.current.spacing))
-        }
+    val scroll = rememberScrollState()
 
-//        NotificationRadioButton(
-//            R.string.notificationsFastMode,
-//            if(BuildConfig.FLAVOR == "huawei") R.string.notificationsFastModeDescriptionHuawei
-//            else R.string.notificationsFastModeDescription,
-//            modifier = Modifier.qaTag(R.string.AccessibilityId_notificationsFastMode),
-//            tag = R.string.recommended,
-//            checked = state.pushEnabled,
-//            onClick = { setEnabled(true) }
-//        )
-//
-//        // spacing between buttons is provided by ripple/downstate of NotificationRadioButton
-//
-//        val explanationTxt = Phrase.from(stringResource(R.string.notificationsSlowModeDescription))
-//            .put(APP_NAME_KEY, stringResource(R.string.app_name))
-//            .format().toString()
-//
-//        NotificationRadioButton(
-//            stringResource(R.string.notificationsSlowMode),
-//            explanationTxt,
-//            modifier = Modifier.qaTag(R.string.AccessibilityId_notificationsSlowMode),
-//            checked = state.pushDisabled,
-//            onClick = { setEnabled(false) }
-//        )
-
-        val isLandscape =
-            LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-        val optionsScroll = rememberScrollState()
-
-        val optionsModifier = if (isLandscape) {
-            Modifier
+    Column(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
                 .weight(1f)
-                .verticalScroll(optionsScroll)
-        } else {
-            Modifier
+                .fillMaxWidth()
+                .verticalScroll(scroll),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(modifier = Modifier.padding(horizontal = LocalDimensions.current.mediumSpacing)) {
+                Text(stringResource(R.string.notificationsMessage), style = LocalType.current.h4)
+                Spacer(Modifier.height(LocalDimensions.current.smallSpacing))
+                Text(
+                    Phrase.from(stringResource(R.string.onboardingMessageNotificationExplanation))
+                        .put(APP_NAME_KEY, stringResource(R.string.app_name))
+                        .format().toString(),
+                    style = LocalType.current.base
+                )
+                Spacer(Modifier.height(LocalDimensions.current.spacing))
+
+                NotificationRadioButton(
+                    R.string.notificationsFastMode,
+                    if (BuildConfig.FLAVOR == "huawei") R.string.notificationsFastModeDescriptionHuawei
+                    else R.string.notificationsFastModeDescription,
+                    modifier = Modifier
+                        .qaTag(R.string.AccessibilityId_notificationsFastMode)
+                        .fillMaxWidth(),
+                    tag = R.string.recommended,
+                    checked = state.pushEnabled,
+                    onClick = { setEnabled(true) }
+                )
+
+                // spacing between buttons is provided by ripple/downstate of NotificationRadioButton
+
+                val explanationTxt =
+                    Phrase.from(stringResource(R.string.notificationsSlowModeDescription))
+                        .put(APP_NAME_KEY, stringResource(R.string.app_name))
+                        .format().toString()
+
+                NotificationRadioButton(
+                    stringResource(R.string.notificationsSlowMode),
+                    explanationTxt,
+                    modifier = Modifier
+                        .qaTag(R.string.AccessibilityId_notificationsSlowMode)
+                        .fillMaxWidth(),
+                    checked = state.pushDisabled,
+                    onClick = { setEnabled(false) }
+                )
+            }
         }
-
-        Column(modifier = optionsModifier) {
-            NotificationRadioButton(
-                R.string.notificationsFastMode,
-                if (BuildConfig.FLAVOR == "huawei")
-                    R.string.notificationsFastModeDescriptionHuawei
-                else
-                    R.string.notificationsFastModeDescription,
-                modifier = Modifier.qaTag(R.string.AccessibilityId_notificationsFastMode),
-                tag = R.string.recommended,
-                checked = state.pushEnabled,
-                onClick = { setEnabled(true) }
-            )
-
-            // spacing between buttons is provided by ripple/downstate of NotificationRadioButton
-
-            val explanationTxt =
-                Phrase.from(stringResource(R.string.notificationsSlowModeDescription))
-                    .put(APP_NAME_KEY, stringResource(R.string.app_name))
-                    .format().toString()
-
-            NotificationRadioButton(
-                stringResource(R.string.notificationsSlowMode),
-                explanationTxt,
-                modifier = Modifier.qaTag(R.string.AccessibilityId_notificationsSlowMode),
-                checked = state.pushDisabled,
-                onClick = { setEnabled(false) }
-            )
-        }
-
-        Spacer(Modifier.weight(1f))
 
         ContinueAccentOutlineButton(Modifier.align(Alignment.CenterHorizontally), onContinue)
     }
@@ -163,12 +134,12 @@ private fun NotificationRadioButton(
 ) {
     // Pass-through from this string ID version to the version that takes strings
     NotificationRadioButton(
-        titleTxt       = stringResource(titleId),
+        titleTxt = stringResource(titleId),
         explanationTxt = stringResource(explanationId),
-        modifier       = modifier,
-        tag            = tag,
-        checked        = checked,
-        onClick        = onClick
+        modifier = modifier,
+        tag = tag,
+        checked = checked,
+        onClick = onClick
     )
 }
 
@@ -185,7 +156,9 @@ private fun NotificationRadioButton(
         onClick = onClick,
         modifier = modifier,
         selected = checked,
-        contentPadding = PaddingValues(horizontal = LocalDimensions.current.mediumSpacing, vertical = 7.dp)
+        contentPadding = PaddingValues(
+            vertical = 7.dp
+        )
     ) {
         Box(
             modifier = Modifier
@@ -197,7 +170,11 @@ private fun NotificationRadioButton(
                 ),
         ) {
             Column(
-                modifier = Modifier.padding(horizontal = LocalDimensions.current.smallSpacing, vertical = LocalDimensions.current.xsSpacing)) {
+                modifier = Modifier.padding(
+                    horizontal = LocalDimensions.current.smallSpacing,
+                    vertical = LocalDimensions.current.xsSpacing
+                )
+            ) {
                 Text(
                     titleTxt,
                     style = LocalType.current.h8
