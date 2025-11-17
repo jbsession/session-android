@@ -139,7 +139,8 @@ fun RadioMemberItem(
     showProBadge: Boolean,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
-    subtitleColor: Color = LocalColors.current.textSecondary
+    subtitleColor: Color = LocalColors.current.textSecondary,
+    showRadioButton: Boolean = true
 ) {
     MemberItem(
         address = address,
@@ -152,10 +153,12 @@ fun RadioMemberItem(
         showProBadge = showProBadge,
         modifier = modifier
     ) {
-        RadioButtonIndicator(
-            selected = selected,
-            enabled = enabled
-        )
+        if (showRadioButton) {
+            RadioButtonIndicator(
+                selected = selected,
+                enabled = enabled
+            )
+        }
     }
 }
 

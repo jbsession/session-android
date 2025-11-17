@@ -253,6 +253,11 @@ class ManageGroupAdminsViewModel @AssistedInject constructor(
             is Commands.ToggleFooter -> toggleFooter()
             is Commands.CloseFooter,
             is Commands.ClearSelection -> clearSelection()
+            is Commands.SelfClick -> {
+                _uiState.update {
+                    it.copy(error = context.getString(R.string.adminStatusYou))
+                }
+            }
             is Commands.MemberClick -> onAdminItemClicked(command.member)
             is Commands.RemoveSearchState -> removeSearchState(command.clearSelection)
             is Commands.SearchFocusChange -> onSearchFocusChanged(command.focus)
@@ -297,7 +302,9 @@ class ManageGroupAdminsViewModel @AssistedInject constructor(
         data object CloseFooter : Commands
         data object ClearSelection : Commands
 
-        data class RemoveSearchState(val clearSelection: Boolean) : Commands
+        data object SelfClick : Commands
+
+        class RemoveSearchState(val clearSelection: Boolean) : Commands
         data class SearchQueryChange(val query: String) : Commands
         data class SearchFocusChange(val focus: Boolean) : Commands
 

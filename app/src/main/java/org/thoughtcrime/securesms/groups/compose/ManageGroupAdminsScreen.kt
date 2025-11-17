@@ -1,5 +1,6 @@
 package org.thoughtcrime.securesms.groups.compose
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -29,10 +30,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -50,6 +53,7 @@ import org.thoughtcrime.securesms.ui.CollapsibleFooterItemData
 import org.thoughtcrime.securesms.ui.Divider
 import org.thoughtcrime.securesms.ui.GetString
 import org.thoughtcrime.securesms.ui.ItemButton
+import org.thoughtcrime.securesms.ui.LoadingDialog
 import org.thoughtcrime.securesms.ui.SearchBarWithClose
 import org.thoughtcrime.securesms.ui.components.BackAppBar
 import org.thoughtcrime.securesms.ui.components.annotatedStringResource
@@ -95,7 +99,7 @@ fun ManageAdmins(
 
     val handleBack: () -> Unit = {
         when {
-            searchFocused -> sendCommand(ManageGroupAdminsViewModel.Commands.RemoveSearchState(false))
+            searchFocused -> sendCommand(RemoveSearchState(false))
             else -> onBack()
         }
     }
@@ -221,7 +225,10 @@ fun ManageAdmins(
                     ManageMemberItem(
                         modifier = Modifier.fillMaxWidth(),
                         member = member,
-                        onClick = { sendCommand(MemberClick(member)) },
+                        onClick = {
+                            if (member.isSelf) sendCommand(SelfClick)
+                            else sendCommand(MemberClick(member))
+                        },
                         selected = member in selectedMembers
                     )
                 }
@@ -232,6 +239,25 @@ fun ManageAdmins(
                     )
                 }
             }
+        }
+    }
+
+    if (uiState.inProgress) {
+        LoadingDialog()
+    }
+
+    val context = LocalContext.current
+
+    LaunchedEffect(showingError) {
+        if (showingError != null) {
+            Toast.makeText(context, showingError, Toast.LENGTH_SHORT).show()
+            sendCommand(DismissError)
+        }
+    }
+    LaunchedEffect(showingOngoingAction) {
+        if (showingOngoingAction != null) {
+            Toast.makeText(context, showingOngoingAction, Toast.LENGTH_SHORT).show()
+            sendCommand(DismissResend)
         }
     }
 }

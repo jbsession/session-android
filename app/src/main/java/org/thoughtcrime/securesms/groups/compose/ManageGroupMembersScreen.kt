@@ -310,7 +310,8 @@ fun ManageMemberItem(
         onClick = onClick,
         modifier = modifier,
         enabled = true,
-        selected = selected
+        selected = selected,
+        showRadioButton = !member.isSelf
     )
 }
 
@@ -414,6 +415,7 @@ private fun EditGroupPreviewSheet() {
             showProBadge = true,
             clickable = true,
             statusLabel = "Invited",
+            isSelf = false
         )
         val twoMember = GroupMemberState(
             accountId = AccountId("05abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1235"),
@@ -435,7 +437,8 @@ private fun EditGroupPreviewSheet() {
             showAsAdmin = true,
             showProBadge = true,
             clickable = true,
-            statusLabel = "Promotion failed"
+            statusLabel = "Promotion failed",
+            isSelf = false
         )
         val threeMember = GroupMemberState(
             accountId = AccountId("05abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1236"),
@@ -457,7 +460,8 @@ private fun EditGroupPreviewSheet() {
             showAsAdmin = false,
             showProBadge = false,
             clickable = true,
-            statusLabel = ""
+            statusLabel = "",
+            isSelf = true
         )
 
         val (_, _) = remember { mutableStateOf<String?>(null) }
@@ -510,6 +514,7 @@ private fun EditGroupEditNamePreview(
             showProBadge = true,
             clickable = true,
             statusLabel = "Invited",
+            isSelf = false
         )
         val twoMember = GroupMemberState(
             accountId = AccountId("05abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1235"),
@@ -531,7 +536,8 @@ private fun EditGroupEditNamePreview(
             showAsAdmin = true,
             showProBadge = true,
             clickable = true,
-            statusLabel = "Promotion failed"
+            statusLabel = "Promotion failed",
+            isSelf = false
         )
         val threeMember = GroupMemberState(
             accountId = AccountId("05abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1236"),
@@ -553,7 +559,8 @@ private fun EditGroupEditNamePreview(
             showAsAdmin = false,
             showProBadge = false,
             clickable = true,
-            statusLabel = ""
+            statusLabel = "",
+            isSelf = false
         )
 
         ManageMembers(
