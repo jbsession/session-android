@@ -31,10 +31,12 @@ import org.thoughtcrime.securesms.conversation.v2.settings.notification.Notifica
 import org.thoughtcrime.securesms.groups.ManageGroupMembersViewModel
 import org.thoughtcrime.securesms.groups.GroupMembersViewModel
 import org.thoughtcrime.securesms.groups.InviteMembersViewModel
+import org.thoughtcrime.securesms.groups.ManageGroupAdminsViewModel
 import org.thoughtcrime.securesms.groups.compose.ManageGroupMembersScreen
 import org.thoughtcrime.securesms.groups.compose.GroupMembersScreen
 import org.thoughtcrime.securesms.groups.compose.InviteAccountIdScreen
 import org.thoughtcrime.securesms.groups.compose.InviteContactsScreen
+import org.thoughtcrime.securesms.groups.compose.ManageGroupAdminsScreen
 import org.thoughtcrime.securesms.home.startconversation.newmessage.NewMessageViewModel
 import org.thoughtcrime.securesms.home.startconversation.newmessage.State
 import org.thoughtcrime.securesms.media.MediaOverviewScreen
@@ -64,6 +66,16 @@ sealed interface ConversationSettingsDestination: Parcelable {
     @Serializable
     @Parcelize
     data class RouteManageMembers private constructor(
+        private val address: String
+    ): ConversationSettingsDestination {
+        constructor(groupAddress: Address.Group): this(groupAddress.address)
+
+        val groupAddress: Address.Group get() = Address.Group(AccountId(address))
+    }
+
+    @Serializable
+    @Parcelize
+    data class RouteManageAdmins private constructor(
         private val address: String
     ): ConversationSettingsDestination {
         constructor(groupAddress: Address.Group): this(groupAddress.address)
@@ -212,6 +224,24 @@ fun ConversationSettingsNavHost(
                     },
                 )
             }
+
+            // Manage group Admins
+            horizontalSlideComposable<RouteManageAdmins> { backStackEntry ->
+                val data: RouteManageAdmins = backStackEntry.toRoute()
+
+                val viewModel =
+                    hiltViewModel<ManageGroupAdminsViewModel, ManageGroupAdminsViewModel.Factory> { factory ->
+                        factory.create(data.groupAddress, navigator)
+                    }
+
+                ManageGroupAdminsScreen(
+                    viewModel = viewModel,
+                    onBack = dropUnlessResumed {
+                        handleBack()
+                    },
+                )
+            }
+
 
             // Invite Contacts to group
             horizontalSlideComposable<RouteInviteToGroup> { backStackEntry ->

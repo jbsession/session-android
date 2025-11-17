@@ -99,6 +99,11 @@ abstract class BaseGroupMembersViewModel(
             .map { pair -> pair?.second.orEmpty().any { !it.showAsAdmin } }
             .stateIn(viewModelScope, SharingStarted.Lazily, false)
 
+    // Output: List of only ADMINS
+    val adminMembers: StateFlow<List<GroupMemberState>> = members
+        .map { list -> list.filter { it.showAsAdmin } }
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
     fun onSearchQueryChanged(query: String) {
         mutableSearchQuery.value = query
     }

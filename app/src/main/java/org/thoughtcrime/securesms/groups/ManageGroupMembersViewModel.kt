@@ -87,7 +87,19 @@ class ManageGroupMembersViewModel @AssistedInject constructor(
         )
     }
 
-    private val _uiState = MutableStateFlow(UiState(options = optionsList))
+    private val adminOptionsList: List<OptionsItem> by lazy {
+        listOf(
+            OptionsItem(
+                // use plural version of this string resource
+                name = context.resources.getQuantityString(R.plurals.promoteMember,2,2),
+                icon = R.drawable.ic_add_admin_custom,
+                onClick = ::navigateToInviteContacts
+            ),
+        )
+    }
+
+    private val _uiState =
+        MutableStateFlow(UiState(options = optionsList, adminOptions = adminOptionsList))
     val uiState: StateFlow<UiState> = _uiState
 
     private val showRemoveMembersDialog = MutableStateFlow(false)
@@ -426,6 +438,7 @@ class ManageGroupMembersViewModel @AssistedInject constructor(
 
     data class UiState(
         val options : List<OptionsItem> = emptyList(),
+        val adminOptions : List<OptionsItem> = emptyList(),
 
         val inProgress: Boolean = false,
         val error: String? = null,

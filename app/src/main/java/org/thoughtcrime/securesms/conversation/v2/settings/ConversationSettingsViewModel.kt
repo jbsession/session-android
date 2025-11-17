@@ -289,7 +289,7 @@ class ConversationSettingsViewModel @AssistedInject constructor(
             qaTag = R.string.qa_conversation_settings_manage_members,
             onClick = {
                 (address as? Address.Group)?.let {
-                    navigateTo(ConversationSettingsDestination.RouteManageMembers(it))
+                    navigateTo(ConversationSettingsDestination.RouteManageAdmins(it))
                 }
             }
         )
