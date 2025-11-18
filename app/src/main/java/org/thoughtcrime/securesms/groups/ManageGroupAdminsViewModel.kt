@@ -58,16 +58,6 @@ class ManageGroupAdminsViewModel @AssistedInject constructor(
 ) {
     private val groupId = groupAddress.accountId
 
-    // Current group name (for header / text, if needed)
-    val groupName: StateFlow<String> = groupInfo
-        .map { it?.first?.name.orEmpty() }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), "")
-
-    private val _mutableSelectedAdmins = MutableStateFlow(emptySet<GroupMemberState>())
-    val selectedAdmins: StateFlow<Set<GroupMemberState>> = _mutableSelectedAdmins
-
-    private val footerCollapsed = MutableStateFlow(false)
-
     /**
      * One option for admins for now: "Promote members"
      */
@@ -81,6 +71,16 @@ class ManageGroupAdminsViewModel @AssistedInject constructor(
             )
         )
     }
+
+    // Current group name (for header / text, if needed)
+    val groupName: StateFlow<String> = groupInfo
+        .map { it?.first?.name.orEmpty() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), "")
+
+    private val _mutableSelectedAdmins = MutableStateFlow(emptySet<GroupMemberState>())
+    val selectedAdmins: StateFlow<Set<GroupMemberState>> = _mutableSelectedAdmins
+
+    private val footerCollapsed = MutableStateFlow(false)
 
     private val _uiState = MutableStateFlow(UiState(options = optionsList))
     val uiState: StateFlow<UiState> = _uiState
