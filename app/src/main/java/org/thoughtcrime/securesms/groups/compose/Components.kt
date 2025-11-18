@@ -26,6 +26,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import network.loki.messenger.R
 import org.session.libsession.utilities.Address
 import org.thoughtcrime.securesms.groups.ContactItem
+import org.thoughtcrime.securesms.groups.GroupMemberState
 import org.thoughtcrime.securesms.groups.InviteMembersViewModel
 import org.thoughtcrime.securesms.ui.AlertDialog
 import org.thoughtcrime.securesms.ui.DialogButtonData
@@ -239,6 +240,33 @@ fun InviteMembersDialog(
                 }
             )
         )
+    )
+}
+
+@Composable
+fun ManageMemberItem(
+    member: GroupMemberState,
+    onClick: (address: Address) -> Unit,
+    modifier: Modifier = Modifier,
+    selected: Boolean = false
+) {
+    RadioMemberItem(
+        address = Address.fromSerialized(member.accountId.hexString),
+        title = member.name,
+        subtitle = member.statusLabel,
+        subtitleColor = if (member.highlightStatus) {
+            LocalColors.current.danger
+        } else {
+            LocalColors.current.textSecondary
+        },
+        showAsAdmin = member.showAsAdmin,
+        showProBadge = member.showProBadge,
+        avatarUIData = member.avatarUIData,
+        onClick = onClick,
+        modifier = modifier,
+        enabled = true,
+        selected = selected,
+        showRadioButton = !member.isSelf
     )
 }
 

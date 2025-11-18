@@ -113,7 +113,7 @@ class ManageGroupAdminsViewModel @AssistedInject constructor(
     private fun navigateToPromoteMembers() {
         viewModelScope.launch {
             navigator.navigate(
-                ConversationSettingsDestination.RouteManageMembers(groupAddress)
+                ConversationSettingsDestination.RoutePromoteMembers(groupAddress)
             )
         }
     }

@@ -289,33 +289,6 @@ fun ManageMembers(
 }
 
 @Composable
-fun ManageMemberItem(
-    member: GroupMemberState,
-    onClick: (address: Address) -> Unit,
-    modifier: Modifier = Modifier,
-    selected: Boolean = false
-) {
-    RadioMemberItem(
-        address = Address.fromSerialized(member.accountId.hexString),
-        title = member.name,
-        subtitle = member.statusLabel,
-        subtitleColor = if (member.highlightStatus) {
-            LocalColors.current.danger
-        } else {
-            LocalColors.current.textSecondary
-        },
-        showAsAdmin = member.showAsAdmin,
-        showProBadge = member.showProBadge,
-        avatarUIData = member.avatarUIData,
-        onClick = onClick,
-        modifier = modifier,
-        enabled = true,
-        selected = selected,
-        showRadioButton = !member.isSelf
-    )
-}
-
-@Composable
 fun ShowRemoveMembersDialog(
     state: ManageGroupMembersViewModel.RemoveMembersDialogState,
     modifier: Modifier = Modifier,

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.squareup.phrase.Phrase
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
+import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,14 +24,12 @@ import org.session.libsession.utilities.ConfigFactoryProtocol
 import org.session.libsession.utilities.StringSubstitutionConstants.COUNT_KEY
 import org.session.libsession.utilities.StringSubstitutionConstants.NAME_KEY
 import org.session.libsession.utilities.StringSubstitutionConstants.OTHER_NAME_KEY
-import org.thoughtcrime.securesms.conversation.v2.settings.ConversationSettingsDestination
 import org.thoughtcrime.securesms.database.RecipientRepository
 import org.thoughtcrime.securesms.ui.GetString
-import org.thoughtcrime.securesms.ui.UINavigator
 import org.thoughtcrime.securesms.util.AvatarUtils
 
 @HiltViewModel(assistedFactory = PromoteMembersViewModel.Factory::class)
-class PromoteMembersViewModel(
+class PromoteMembersViewModel @AssistedInject constructor(
     @Assisted private val groupAddress: Address.Group,
     @ApplicationContext private val context: Context,
     storage: StorageProtocol,
@@ -218,7 +217,7 @@ class PromoteMembersViewModel(
         data object CloseFooter : Commands
         data object ClearSelection : Commands
 
-        class RemoveSearchState(val clearSelection: Boolean) : Commands
+        data class RemoveSearchState(val clearSelection: Boolean) : Commands
         data class SearchQueryChange(val query: String) : Commands
         data class SearchFocusChange(val focus: Boolean) : Commands
 
@@ -226,9 +225,6 @@ class PromoteMembersViewModel(
     }
 
     data class UiState(
-        val error: String? = null,
-        val ongoingAction: String? = null,
-
         // search UI state:
         val searchQuery: String = "",
         val isSearchFocused: Boolean = false,
@@ -254,7 +250,6 @@ class PromoteMembersViewModel(
     interface Factory {
         fun create(
             groupAddress: Address.Group,
-            navigator: UINavigator<ConversationSettingsDestination>
-        ): ManageGroupAdminsViewModel
+        ): PromoteMembersViewModel
     }
 }
