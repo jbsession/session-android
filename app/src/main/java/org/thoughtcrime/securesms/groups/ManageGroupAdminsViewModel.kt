@@ -119,9 +119,9 @@ class ManageGroupAdminsViewModel @AssistedInject constructor(
     }
 
     /**
-     * Resend promotions to all selected admins.
+     * Send promotions to all selected admins.
      */
-    fun onResendPromotionsClicked() {
+    fun onSendPromotionsClicked(isResend : Boolean) {
         val selected = selectedAdmins.value
         if (selected.isEmpty()) return
 
@@ -143,7 +143,7 @@ class ManageGroupAdminsViewModel @AssistedInject constructor(
             groupManager.promoteMember(
                 groupId,
                 accountIds,
-                isRepromote = true
+                isRepromote = isResend
             )
         }
     }
@@ -234,7 +234,7 @@ class ManageGroupAdminsViewModel @AssistedInject constructor(
                 ),
                 buttonLabel = GetString(context.getString(R.string.resend)),
                 isDanger = false,
-                onClick = { onResendPromotionsClicked() }
+                onClick = { onSendPromotionsClicked(true) }
             )
         )
 

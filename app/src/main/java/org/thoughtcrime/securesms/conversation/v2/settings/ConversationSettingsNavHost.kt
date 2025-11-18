@@ -398,8 +398,8 @@ fun ConversationSettingsNavHost(
                     viewModel = viewModel,
                     onConfirmClick = { ->
                         //send invites from the manage admin screen
-//                        manageGroupAdminsViewModel.onResendPromotionsClicked(viewModel.selectedMembers)
-//                        handleBack()
+                        manageGroupAdminsViewModel.onSendPromotionsClicked(false)
+                        handleBack()
                     },
                     onBack = dropUnlessResumed {
                         handleBack()

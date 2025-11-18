@@ -3,7 +3,6 @@ package org.thoughtcrime.securesms.groups.compose
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -27,31 +26,31 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import network.loki.messenger.R
 import org.thoughtcrime.securesms.groups.GroupMemberState
-import org.thoughtcrime.securesms.groups.InviteMembersViewModel.Commands.ShowSendInviteDialog
 import org.thoughtcrime.securesms.groups.PromoteMembersViewModel
 import org.thoughtcrime.securesms.groups.PromoteMembersViewModel.Commands
-import org.thoughtcrime.securesms.groups.PromoteMembersViewModel.Commands.*
-import org.thoughtcrime.securesms.preferences.SettingsViewModel.Commands.HideUsernameDialog
-import org.thoughtcrime.securesms.preferences.SettingsViewModel.Commands.SetUsername
-import org.thoughtcrime.securesms.preferences.SettingsViewModel.Commands.UpdateUsername
+import org.thoughtcrime.securesms.groups.PromoteMembersViewModel.Commands.CloseFooter
+import org.thoughtcrime.securesms.groups.PromoteMembersViewModel.Commands.DismissConfirmDialog
+import org.thoughtcrime.securesms.groups.PromoteMembersViewModel.Commands.DismissPromoteDialog
+import org.thoughtcrime.securesms.groups.PromoteMembersViewModel.Commands.MemberClick
+import org.thoughtcrime.securesms.groups.PromoteMembersViewModel.Commands.SearchFocusChange
+import org.thoughtcrime.securesms.groups.PromoteMembersViewModel.Commands.SearchQueryChange
+import org.thoughtcrime.securesms.groups.PromoteMembersViewModel.Commands.ShowConfirmDialog
+import org.thoughtcrime.securesms.groups.PromoteMembersViewModel.Commands.ShowPromoteDialog
+import org.thoughtcrime.securesms.groups.PromoteMembersViewModel.Commands.ToggleFooter
 import org.thoughtcrime.securesms.ui.AlertDialog
 import org.thoughtcrime.securesms.ui.CollapsibleFooterAction
 import org.thoughtcrime.securesms.ui.CollapsibleFooterActionData
 import org.thoughtcrime.securesms.ui.CollapsibleFooterItemData
 import org.thoughtcrime.securesms.ui.DialogButtonData
 import org.thoughtcrime.securesms.ui.GetString
-import org.thoughtcrime.securesms.ui.RadioOption
 import org.thoughtcrime.securesms.ui.SearchBarWithClose
 import org.thoughtcrime.securesms.ui.components.BackAppBar
-import org.thoughtcrime.securesms.ui.components.DialogTitledRadioButton
-import org.thoughtcrime.securesms.ui.components.SessionOutlinedTextField
 import org.thoughtcrime.securesms.ui.components.annotatedStringResource
 import org.thoughtcrime.securesms.ui.theme.LocalColors
 import org.thoughtcrime.securesms.ui.theme.LocalDimensions
@@ -66,7 +65,7 @@ fun PromoteMembersScreen(
     val uiState = viewModel.uiState.collectAsState().value
     val searchQuery = viewModel.searchQuery.collectAsState().value
     val hasActiveMembers = viewModel.hasActiveMembers.collectAsState().value
-    val members = viewModel.nonAdminMembers.collectAsState().value
+    val members = viewModel.activeMembers.collectAsState().value
     val selectedMembers = viewModel.selectedMembers.collectAsState().value
 
     PromoteMembers(
@@ -77,7 +76,7 @@ fun PromoteMembersScreen(
         members = members,
         selectedMembers = selectedMembers,
         onConfirmClick = onConfirmClick,
-        hasActiveMembers = true
+        hasActiveMembers = hasActiveMembers
     )
 }
 
