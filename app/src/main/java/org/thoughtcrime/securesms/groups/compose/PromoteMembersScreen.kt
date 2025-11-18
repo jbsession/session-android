@@ -3,6 +3,7 @@ package org.thoughtcrime.securesms.groups.compose
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -26,19 +27,32 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import network.loki.messenger.R
 import org.thoughtcrime.securesms.groups.GroupMemberState
+import org.thoughtcrime.securesms.groups.InviteMembersViewModel.Commands.ShowSendInviteDialog
 import org.thoughtcrime.securesms.groups.PromoteMembersViewModel
 import org.thoughtcrime.securesms.groups.PromoteMembersViewModel.Commands
 import org.thoughtcrime.securesms.groups.PromoteMembersViewModel.Commands.*
+import org.thoughtcrime.securesms.preferences.SettingsViewModel.Commands.HideUsernameDialog
+import org.thoughtcrime.securesms.preferences.SettingsViewModel.Commands.SetUsername
+import org.thoughtcrime.securesms.preferences.SettingsViewModel.Commands.UpdateUsername
+import org.thoughtcrime.securesms.ui.AlertDialog
 import org.thoughtcrime.securesms.ui.CollapsibleFooterAction
 import org.thoughtcrime.securesms.ui.CollapsibleFooterActionData
+import org.thoughtcrime.securesms.ui.CollapsibleFooterItemData
+import org.thoughtcrime.securesms.ui.DialogButtonData
+import org.thoughtcrime.securesms.ui.GetString
+import org.thoughtcrime.securesms.ui.RadioOption
 import org.thoughtcrime.securesms.ui.SearchBarWithClose
 import org.thoughtcrime.securesms.ui.components.BackAppBar
+import org.thoughtcrime.securesms.ui.components.DialogTitledRadioButton
+import org.thoughtcrime.securesms.ui.components.SessionOutlinedTextField
+import org.thoughtcrime.securesms.ui.components.annotatedStringResource
 import org.thoughtcrime.securesms.ui.theme.LocalColors
 import org.thoughtcrime.securesms.ui.theme.LocalDimensions
 import org.thoughtcrime.securesms.ui.theme.LocalType
@@ -51,6 +65,7 @@ fun PromoteMembersScreen(
 ) {
     val uiState = viewModel.uiState.collectAsState().value
     val searchQuery = viewModel.searchQuery.collectAsState().value
+    val hasActiveMembers = viewModel.hasActiveMembers.collectAsState().value
     val members = viewModel.nonAdminMembers.collectAsState().value
     val selectedMembers = viewModel.selectedMembers.collectAsState().value
 
@@ -61,7 +76,8 @@ fun PromoteMembersScreen(
         sendCommand = viewModel::onCommand,
         members = members,
         selectedMembers = selectedMembers,
-        onConfirmClick = onConfirmClick
+        onConfirmClick = onConfirmClick,
+        hasActiveMembers = true
     )
 }
 
@@ -74,6 +90,7 @@ fun PromoteMembers(
     sendCommand: (command: Commands) -> Unit,
     members: List<GroupMemberState>,
     selectedMembers: Set<GroupMemberState> = emptySet(),
+    hasActiveMembers: Boolean = false,
     onConfirmClick: () -> Unit
 ) {
     val searchFocused = uiState.isSearchFocused
@@ -92,7 +109,7 @@ fun PromoteMembers(
     Scaffold(
         topBar = {
             BackAppBar(
-                title = pluralStringResource(id = R.plurals.promoteMember,2),
+                title = pluralStringResource(id = R.plurals.promoteMember, 2),
                 onBack = handleBack,
             )
         },
@@ -108,7 +125,14 @@ fun PromoteMembers(
                         title = uiState.footer.footerTitle,
                         collapsed = uiState.footer.collapsed,
                         visible = uiState.footer.visible,
-                        items = emptyList()
+                        items = listOf(
+                            CollapsibleFooterItemData(
+                                label = uiState.footer.footerActionLabel,
+                                buttonLabel = GetString(LocalResources.current.getString(R.string.promote)),
+                                isDanger = false,
+                                onClick = { sendCommand(ShowPromoteDialog) }
+                            )
+                        )
                     ),
                     onCollapsedClicked = { sendCommand(ToggleFooter) },
                     onClosedClicked = { sendCommand(CloseFooter) }
@@ -127,49 +151,136 @@ fun PromoteMembers(
                     .padding(horizontal = LocalDimensions.current.mediumSpacing)
                     .fillMaxWidth()
                     .wrapContentWidth(Alignment.CenterHorizontally),
-                text = LocalResources.current.getString(R.string.adminCannotBeDemoted),
+                text = LocalResources.current.getString(if (!hasActiveMembers) R.string.noNonAdminsInGroup else R.string.adminCannotBeDemoted),
                 textAlign = TextAlign.Center,
                 style = LocalType.current.base,
                 color = LocalColors.current.textSecondary
             )
 
-            Spacer(modifier = Modifier.height(LocalDimensions.current.smallSpacing))
+            if (hasActiveMembers) {
+                Spacer(modifier = Modifier.height(LocalDimensions.current.smallSpacing))
 
-            SearchBarWithClose(
-                query = searchQuery,
-                onValueChanged = { query -> sendCommand(SearchQueryChange(query)) },
-                onClear = { sendCommand(SearchQueryChange("")) },
-                placeholder = if (searchFocused) "" else LocalResources.current.getString(R.string.search),
-                enabled = true,
-                isFocused = searchFocused,
-                modifier = Modifier.padding(horizontal = LocalDimensions.current.smallSpacing),
-                onFocusChanged = { isFocused -> sendCommand(SearchFocusChange(isFocused)) }
-            )
+                SearchBarWithClose(
+                    query = searchQuery,
+                    onValueChanged = { query -> sendCommand(SearchQueryChange(query)) },
+                    onClear = { sendCommand(SearchQueryChange("")) },
+                    placeholder = if (searchFocused) "" else LocalResources.current.getString(R.string.search),
+                    enabled = true,
+                    isFocused = searchFocused,
+                    modifier = Modifier.padding(horizontal = LocalDimensions.current.smallSpacing),
+                    onFocusChanged = { isFocused -> sendCommand(SearchFocusChange(isFocused)) }
+                )
 
-            Spacer(modifier = Modifier.height(LocalDimensions.current.smallSpacing))
+                Spacer(modifier = Modifier.height(LocalDimensions.current.smallSpacing))
 
-            // List of members
-            LazyColumn(
-                modifier = Modifier
-                    .weight(1f)
-                    .imePadding()
-            ) {
-                items(members) { member ->
-                    // Each member's view
-                    ManageMemberItem(
-                        modifier = Modifier.fillMaxWidth(),
-                        member = member,
-                        onClick = { sendCommand(MemberClick(member)) },
-                        selected = member in selectedMembers
-                    )
-                }
+                // List of members
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .imePadding()
+                ) {
+                    items(members) { member ->
+                        // Each member's view
+                        ManageMemberItem(
+                            modifier = Modifier.fillMaxWidth(),
+                            member = member,
+                            onClick = { sendCommand(MemberClick(member)) },
+                            selected = member in selectedMembers
+                        )
+                    }
 
-                item {
-                    Spacer(
-                        modifier = Modifier.windowInsetsBottomHeight(WindowInsets.systemBars)
-                    )
+                    item {
+                        Spacer(
+                            modifier = Modifier.windowInsetsBottomHeight(WindowInsets.systemBars)
+                        )
+                    }
                 }
             }
         }
     }
+
+    if (uiState.showConfirmDialog) {
+        ConfirmDialog(onConfirmClick = onConfirmClick, sendCommand = sendCommand)
+    }
+
+    if (uiState.showPromoteDialog) {
+        PromotionDialog(sendCommand = sendCommand, bodyText = uiState.promoteDialogBody)
+    }
+}
+
+@Composable
+fun ConfirmDialog(
+    modifier: Modifier = Modifier,
+    onConfirmClick: () -> Unit,
+    sendCommand: (Commands) -> Unit
+) {
+    AlertDialog(
+        modifier = modifier,
+        onDismissRequest = {
+            // hide dialog
+            sendCommand(DismissConfirmDialog)
+        },
+        title = annotatedStringResource(R.string.confirmPromotion),
+        text = annotatedStringResource(R.string.confirmPromotionDescription),
+        buttons = listOf(
+            DialogButtonData(
+                text = GetString(stringResource(R.string.cancel)),
+                onClick = {
+                    sendCommand(DismissConfirmDialog)
+                }
+            ),
+            DialogButtonData(
+                text = GetString(stringResource(id = R.string.confirm)),
+                color = LocalColors.current.danger,
+                dismissOnClick = false,
+                onClick = {
+                    sendCommand(DismissConfirmDialog)
+                    onConfirmClick()
+                }
+            )
+        )
+    )
+}
+
+@Composable
+fun PromotionDialog(
+    modifier: Modifier = Modifier,
+    sendCommand: (Commands) -> Unit,
+    bodyText: String
+) {
+    AlertDialog(
+        onDismissRequest = {
+            // hide dialog
+            sendCommand(DismissPromoteDialog)
+        },
+        title = stringResource(R.string.promote),
+        text = bodyText,
+        showCloseButton = true,
+        content = {
+            Text(
+                modifier = Modifier.padding(horizontal = LocalDimensions.current.smallSpacing),
+                text = LocalResources.current.getString(R.string.promoteAdminsWarning),
+                style = LocalType.current.small,
+                color = LocalColors.current.warning,
+                textAlign = TextAlign.Center
+            )
+        },
+        buttons = listOf(
+            DialogButtonData(
+                text = GetString(stringResource(id = R.string.promote)),
+                color = LocalColors.current.danger,
+                dismissOnClick = false,
+                onClick = {
+                    sendCommand(DismissConfirmDialog)
+                    sendCommand(ShowConfirmDialog)
+                }
+            ),
+            DialogButtonData(
+                text = GetString(stringResource(R.string.cancel)),
+                onClick = {
+                    sendCommand(DismissConfirmDialog)
+                }
+            )
+        )
+    )
 }

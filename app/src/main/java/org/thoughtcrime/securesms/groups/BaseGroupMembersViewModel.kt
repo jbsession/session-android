@@ -94,6 +94,16 @@ abstract class BaseGroupMembersViewModel(
         .map { list -> list.filter { !it.showAsAdmin } }
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
+    // Output : List of active members that can be promoted
+    val activeMembers: StateFlow<List<GroupMemberState>> = members
+        .map { list -> list.filter { !it.showAsAdmin && it.status == GroupMember.Status.INVITE_ACCEPTED } }
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    val hasActiveMembers: StateFlow<Boolean> =
+        groupInfo
+            .map { pair -> pair?.second.orEmpty().any { !it.showAsAdmin  && it.status == GroupMember.Status.INVITE_ACCEPTED} }
+            .stateIn(viewModelScope, SharingStarted.Lazily, false)
+
     val hasNonAdminMembers: StateFlow<Boolean> =
         groupInfo
             .map { pair -> pair?.second.orEmpty().any { !it.showAsAdmin } }

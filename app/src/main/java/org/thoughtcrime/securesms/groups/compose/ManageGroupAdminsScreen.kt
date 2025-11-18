@@ -150,6 +150,7 @@ fun ManageAdmins(
                 style = LocalType.current.base,
                 color = LocalColors.current.textSecondary
             )
+
             AnimatedVisibility(
                 // show only when add-members is enabled AND search is not focused
                 visible = !searchFocused,
@@ -164,30 +165,36 @@ fun ManageAdmins(
                             shrinkTowards = Alignment.Top
                         )
             ) {
-                Cell(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(LocalDimensions.current.smallSpacing),
-                ) {
-                    Column {
-                        uiState.options.forEachIndexed { index, option ->
-                            ItemButton(
-                                modifier = Modifier.qaTag(option.qaTag),
-                                text = annotatedStringResource(option.name),
-                                iconRes = option.icon,
-                                shape = when (index) {
-                                    0 -> getCellTopShape()
-                                    uiState.options.lastIndex -> getCellBottomShape()
-                                    else -> RectangleShape
-                                },
-                                onClick = option.onClick,
-                            )
+                Column {
+                    Spacer(modifier = Modifier.height(LocalDimensions.current.smallSpacing))
 
-                            if (index != uiState.options.lastIndex) Divider()
+                    Cell(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = LocalDimensions.current.smallSpacing),
+                    ) {
+                        Column {
+                            uiState.options.forEachIndexed { index, option ->
+                                ItemButton(
+                                    modifier = Modifier.qaTag(option.qaTag),
+                                    text = annotatedStringResource(option.name),
+                                    iconRes = option.icon,
+                                    shape = when (index) {
+                                        0 -> getCellTopShape()
+                                        uiState.options.lastIndex -> getCellBottomShape()
+                                        else -> RectangleShape
+                                    },
+                                    onClick = option.onClick,
+                                )
+
+                                if (index != uiState.options.lastIndex) Divider()
+                            }
                         }
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(LocalDimensions.current.smallSpacing))
 
             if (!searchFocused) {
                 Text(

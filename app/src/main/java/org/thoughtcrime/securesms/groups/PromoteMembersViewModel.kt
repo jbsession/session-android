@@ -145,7 +145,7 @@ class PromoteMembersViewModel @AssistedInject constructor(
 
     private fun buildPromoteDialogBody(
         selected: Set<GroupMemberState>
-    ): CharSequence {
+    ): String {
         val count = selected.size
         val firstMember = selected.firstOrNull()
 
@@ -170,7 +170,7 @@ class PromoteMembersViewModel @AssistedInject constructor(
                 .format()
         }
 
-        return body
+        return body.toString()
     }
 
     fun onCommand(command: Commands) {
@@ -232,7 +232,7 @@ class PromoteMembersViewModel @AssistedInject constructor(
         val showConfirmDialog: Boolean = false,
 
         val showPromoteDialog: Boolean = false,
-        val promoteDialogBody: CharSequence = "",
+        val promoteDialogBody: String = "",
 
         //Collapsible footer
         val footer: CollapsibleFooterState = CollapsibleFooterState()
