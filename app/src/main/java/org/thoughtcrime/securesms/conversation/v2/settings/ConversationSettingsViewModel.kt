@@ -1057,7 +1057,7 @@ class ConversationSettingsViewModel @AssistedInject constructor(
                     negativeQaTag = dialogData.negativeQaTag?.let { context.getString(it) },
                     onPositive = {if(isUserLastAdmin) confirmLeaveGroup() else leaveGroup()},
                     onNegative = {if(isUserLastAdmin)
-                        navigateTo(ConversationSettingsDestination.RoutePromoteMembers(groupV2Id.toString()))
+                        navigateTo(ConversationSettingsDestination.RoutePromoteMembers(address))
                     }
                 )
             )
