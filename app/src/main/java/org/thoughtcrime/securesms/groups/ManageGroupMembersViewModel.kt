@@ -260,12 +260,6 @@ class ManageGroupMembersViewModel @AssistedInject constructor(
         }
     }
 
-    fun onResendPromotionClicked(memberSessionId: AccountId) {
-        performGroupOperation(showLoading = false) {
-            groupManager.promoteMember(groupId, listOf(memberSessionId), isRepromote = true)
-        }
-    }
-
     fun onDismissError() {
         _uiState.update { it.copy(error = null) }
     }

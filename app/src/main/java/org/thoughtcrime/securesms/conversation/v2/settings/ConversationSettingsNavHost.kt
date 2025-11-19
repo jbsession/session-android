@@ -386,21 +386,8 @@ fun ConversationSettingsNavHost(
                         factory.create(groupAddress = data.groupAddress)
                     }
 
-                // grab a hold of manage group's VM
-                val parentEntry = remember(backStackEntry) {
-                    navController.getBackStackEntry(
-                        RouteManageAdmins(data.groupAddress)
-                    )
-                }
-                val manageGroupAdminsViewModel: ManageGroupAdminsViewModel = hiltViewModel(parentEntry)
-
                 PromoteMembersScreen(
                     viewModel = viewModel,
-                    onConfirmClick = { ->
-                        //send invites from the manage admin screen
-                        manageGroupAdminsViewModel.onSendPromotionsClicked(false)
-                        handleBack()
-                    },
                     onBack = dropUnlessResumed {
                         handleBack()
                     },

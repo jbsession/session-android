@@ -8,6 +8,8 @@ import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +29,7 @@ import org.session.libsession.utilities.StringSubstitutionConstants.OTHER_NAME_K
 import org.thoughtcrime.securesms.database.RecipientRepository
 import org.thoughtcrime.securesms.ui.GetString
 import org.thoughtcrime.securesms.util.AvatarUtils
+import kotlin.collections.map
 
 @HiltViewModel(assistedFactory = PromoteMembersViewModel.Factory::class)
 class PromoteMembersViewModel @AssistedInject constructor(
@@ -109,6 +112,56 @@ class PromoteMembersViewModel @AssistedInject constructor(
         _mutableSelectedMembers.value = emptySet()
     }
 
+    fun sendPromotionInvites(){
+        val selected = selectedMembers.value
+        if (selected.isEmpty()) return
+
+        performGroupOperation() {
+            val accountIds = selected.map { it.accountId }
+
+            removeSearchState(clearSelection = true)
+
+            _uiState.update {
+                it.copy(
+                    toast = context.resources.getQuantityString(
+                        R.plurals.resendingInvite,
+                        selectedMembers.value.size,
+                        selectedMembers.value.size
+                    )
+                )
+            }
+
+            groupManager.promoteMember(
+                groupId,
+                accountIds,
+                isRepromote = false
+            )
+        }
+    }
+
+    private fun performGroupOperation(
+        errorMessage: ((Throwable) -> String?)? = null,
+        operation: suspend () -> Unit
+    ) {
+        viewModelScope.launch {
+            @Suppress("OPT_IN_USAGE")
+            val task = GlobalScope.async {
+                operation()
+            }
+
+            try {
+                task.await()
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        toast = errorMessage?.invoke(e)
+                            ?: context.getString(R.string.errorUnknown)
+                    )
+                }
+            }
+        }
+    }
+
     private fun buildFooterState(
         selected: Set<GroupMemberState>,
         isCollapsed: Boolean
@@ -155,6 +208,7 @@ class PromoteMembersViewModel @AssistedInject constructor(
                     .put(NAME_KEY, firstMember?.name)
                     .format()
             }
+
             2 -> {
                 val secondMember = selected.elementAtOrNull(1)?.name
                 Phrase.from(context, R.string.adminPromoteTwoDescription)
@@ -191,6 +245,12 @@ class PromoteMembersViewModel @AssistedInject constructor(
                 _uiState.update { it.copy(showConfirmDialog = false) }
             }
 
+            is Commands.DismissToast -> {
+                _uiState.update { it.copy(toast = null) }
+            }
+
+            is Commands.SendPromotionInvites -> sendPromotionInvites()
+
             is Commands.ToggleFooter -> toggleFooter()
 
             is Commands.CloseFooter,
@@ -213,6 +273,10 @@ class PromoteMembersViewModel @AssistedInject constructor(
         data object ShowConfirmDialog : Commands
         data object DismissConfirmDialog : Commands
 
+        data object DismissToast : Commands
+
+        data object SendPromotionInvites : Commands
+
         data object ToggleFooter : Commands
         data object CloseFooter : Commands
         data object ClearSelection : Commands
@@ -225,6 +289,8 @@ class PromoteMembersViewModel @AssistedInject constructor(
     }
 
     data class UiState(
+        val toast: String? = null,
+
         // search UI state:
         val searchQuery: String = "",
         val isSearchFocused: Boolean = false,
