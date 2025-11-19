@@ -286,7 +286,7 @@ fun PromotionDialog(
                 color = LocalColors.current.danger,
                 dismissOnClick = false,
                 onClick = {
-                    sendCommand(DismissConfirmDialog)
+                    sendCommand(DismissPromoteDialog)
                     sendCommand(ShowConfirmDialog)
 
                 }
@@ -294,7 +294,7 @@ fun PromotionDialog(
             DialogButtonData(
                 text = GetString(stringResource(R.string.cancel)),
                 onClick = {
-                    sendCommand(DismissConfirmDialog)
+                    sendCommand(DismissPromoteDialog)
                 }
             )
         )

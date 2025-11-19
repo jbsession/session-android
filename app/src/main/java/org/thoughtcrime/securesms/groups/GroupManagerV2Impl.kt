@@ -1262,7 +1262,7 @@ class GroupManagerV2Impl @Inject constructor(
         var amAdmin = false
 
         for ((member, status) in membersWithStatus) {
-            val isAdminLike = member.isAdminOrBeingPromoted(status) && !member.isRemoved(status)
+            val isAdminLike = status == GroupMember.Status.PROMOTION_ACCEPTED && !member.isRemoved(status)
             if (!isAdminLike) continue
 
             adminCount++

@@ -96,7 +96,7 @@ abstract class BaseGroupMembersViewModel(
 
     // Output : List of active members that can be promoted
     val activeMembers: StateFlow<List<GroupMemberState>> = members
-        .map { list -> list.filter { !it.showAsAdmin && it.status != GroupMember.Status.PROMOTION_ACCEPTED } }
+        .map { list -> list.filter { !it.showAsAdmin && it.status == GroupMember.Status.INVITE_ACCEPTED } }
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     val hasActiveMembers: StateFlow<Boolean> =
@@ -111,7 +111,14 @@ abstract class BaseGroupMembersViewModel(
 
     // Output: List of only ADMINS
     val adminMembers: StateFlow<List<GroupMemberState>> = members
-        .map { list -> list.filter { it.showAsAdmin } }
+        .map { list ->
+            list.filter { it.showAsAdmin }
+                .sortedWith(
+                    compareBy<GroupMemberState> { adminOrder(it) }
+                        .thenComparing(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+                        .thenBy { it.accountId }
+                )
+        }
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     fun onSearchQueryChanged(query: String) {
@@ -225,6 +232,18 @@ private fun stateOrder(status: GroupMember.Status?): Int = when (status) {
     GroupMember.Status.REMOVED_INCLUDING_MESSAGES -> 5
     // 7. Member (everything else)
     else -> 6
+}
+
+private fun adminOrder(state: GroupMemberState): Int {
+    if (state.isSelf) return 7 // "You" always last
+    return when (state.status) {
+        GroupMember.Status.PROMOTION_FAILED -> 1
+        GroupMember.Status.PROMOTION_NOT_SENT -> 2
+        GroupMember.Status.PROMOTION_UNKNOWN -> 3
+        GroupMember.Status.PROMOTION_SENDING -> 4
+        GroupMember.Status.PROMOTION_SENT -> 5
+        else -> 6
+    }
 }
 
 data class GroupMemberState(
