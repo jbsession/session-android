@@ -30,6 +30,7 @@ import kotlinx.coroutines.withContext
 import network.loki.messenger.R
 import network.loki.messenger.libsession_util.ConfigBase.Companion.PRIORITY_HIDDEN
 import network.loki.messenger.libsession_util.ConfigBase.Companion.PRIORITY_VISIBLE
+import network.loki.messenger.libsession_util.allWithStatus
 import network.loki.messenger.libsession_util.util.ExpiryMode
 import org.session.libsession.database.StorageProtocol
 import org.session.libsession.messaging.groups.GroupManagerV2
@@ -313,6 +314,16 @@ class ConversationSettingsViewModel @AssistedInject constructor(
         )
     }
 
+    private val optionAdminLeaveGroup: OptionsItem by lazy{
+        OptionsItem(
+            name = context.getString(R.string.groupLeave),
+            icon = R.drawable.ic_log_out,
+            qaTag = R.string.qa_conversation_settings_leave_group,
+            onClick = ::confirmAdminLeaveGroup
+        )
+    }
+
+
     // Community
     private val optionCopyCommunityURL: OptionsItem by lazy{
         OptionsItem(
@@ -582,7 +593,7 @@ class ConversationSettingsViewModel @AssistedInject constructor(
                         dangerOptions.addAll(
                             listOf(
                                 optionClearMessages,
-                                optionLeaveGroup,
+                                optionAdminLeaveGroup,
                                 optionDeleteGroup
                             )
                         )
@@ -764,7 +775,7 @@ class ConversationSettingsViewModel @AssistedInject constructor(
                     positiveQaTag = context.getString(R.string.qa_conversation_settings_dialog_block_confirm),
                     negativeQaTag = context.getString(R.string.qa_conversation_settings_dialog_block_cancel),
                     onPositive = ::blockUser,
-                    onNegative = {}
+                    onNegative = {},
                 )
             )
         }
@@ -1025,8 +1036,37 @@ class ConversationSettingsViewModel @AssistedInject constructor(
         }
     }
 
+    private fun confirmAdminLeaveGroup(){
+        val groupV2Id = (address as? Address.Group)?.accountId ?: return
+        val isUserLastAdmin = groupManager.isCurrentUserLastAdmin(groupV2Id)
+        _dialogState.update { state ->
+            val dialogData = groupManager.getAdminLeaveGroupDialogData(
+                groupV2Id,
+                _uiState.value.name
+            ) ?: return
+
+            state.copy(
+                showSimpleDialog = SimpleDialogData(
+                    title = dialogData.title,
+                    message = dialogData.message,
+                    positiveText = context.getString(dialogData.positiveText),
+                    negativeText = dialogData.negativePlurals?.let {
+                        context.resources.getQuantityString(it, 1, 1)
+                    } ?: context.getString(dialogData.negativeText),
+                    positiveQaTag = dialogData.positiveQaTag?.let { context.getString(it) },
+                    negativeQaTag = dialogData.negativeQaTag?.let { context.getString(it) },
+                    onPositive = {if(isUserLastAdmin) confirmLeaveGroup() else leaveGroup()},
+                    onNegative = {if(isUserLastAdmin)
+                        navigateTo(ConversationSettingsDestination.RoutePromoteMembers(groupV2Id.toString()))
+                    }
+                )
+            )
+        }
+    }
+
     private fun confirmLeaveGroup(){
         val groupV2Id = (address as? Address.Group)?.accountId ?: return
+
         _dialogState.update { state ->
             val dialogData = groupManager.getLeaveGroupConfirmationDialogData(
                 groupV2Id,
@@ -1038,9 +1078,11 @@ class ConversationSettingsViewModel @AssistedInject constructor(
                     title = dialogData.title,
                     message = dialogData.message,
                     positiveText = context.getString(dialogData.positiveText),
-                    negativeText = context.getString(dialogData.negativeText),
-                    positiveQaTag = dialogData.positiveQaTag?.let{ context.getString(it) },
-                    negativeQaTag = dialogData.negativeQaTag?.let{ context.getString(it) },
+                    negativeText = dialogData.negativePlurals?.let {
+                        context.resources.getQuantityString(it, 1, 1)
+                    } ?: context.getString(dialogData.negativeText),
+                    positiveQaTag = dialogData.positiveQaTag?.let { context.getString(it) },
+                    negativeQaTag = dialogData.negativeQaTag?.let { context.getString(it) },
                     onPositive = ::leaveGroup,
                     onNegative = {}
                 )

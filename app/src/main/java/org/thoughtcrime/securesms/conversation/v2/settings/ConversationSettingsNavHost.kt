@@ -87,7 +87,7 @@ sealed interface ConversationSettingsDestination: Parcelable {
 
     @Serializable
     @Parcelize
-    data class RoutePromoteMembers private constructor(
+    data class RoutePromoteMembers(
         private val address: String
     ): ConversationSettingsDestination {
         constructor(groupAddress: Address.Group): this(groupAddress.address)

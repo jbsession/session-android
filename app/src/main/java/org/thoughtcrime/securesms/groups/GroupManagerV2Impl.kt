@@ -15,6 +15,7 @@ import network.loki.messenger.R
 import network.loki.messenger.libsession_util.ConfigBase.Companion.PRIORITY_VISIBLE
 import network.loki.messenger.libsession_util.ED25519
 import network.loki.messenger.libsession_util.Namespace
+import network.loki.messenger.libsession_util.allWithStatus
 import network.loki.messenger.libsession_util.util.Bytes.Companion.toBytes
 import network.loki.messenger.libsession_util.util.Conversation
 import network.loki.messenger.libsession_util.util.ExpiryMode
@@ -1204,7 +1205,6 @@ class GroupManagerV2Impl @Inject constructor(
             negativeQaTag = R.string.qa_conversation_settings_dialog_leave_group_cancel
         }
 
-
         return GroupManagerV2.ConfirmDialogData(
                 title = application.getString(title),
                 message = message,
@@ -1213,6 +1213,66 @@ class GroupManagerV2Impl @Inject constructor(
                 positiveQaTag = positiveQaTag,
                 negativeQaTag = negativeQaTag,
             )
+    }
+
+    override fun getAdminLeaveGroupDialogData(
+        groupId: AccountId,
+        name: String
+    ): GroupManagerV2.ConfirmDialogData? {
+        val groupData = configFactory.getGroup(groupId) ?: return null
+
+        val title = R.string.groupLeave
+        var message: CharSequence = ""
+        var positiveButton = R.string.leave
+        var negativePlurals : Int? = null
+        var positiveQaTag = R.string.qa_conversation_settings_dialog_leave_group_confirm
+        var negativeQaTag = R.string.qa_conversation_settings_dialog_leave_group_cancel
+
+        if (isCurrentUserLastAdmin(groupId)) {
+            message = Phrase.from(application, R.string.groupOnlyAdmin)
+                .put(GROUP_NAME_KEY, name)
+                .format()
+            positiveButton = R.string.groupDelete
+            negativePlurals = R.plurals.addAdmin
+        } else {
+            message = Phrase.from(application, R.string.groupLeaveDescription)
+                .put(GROUP_NAME_KEY, name)
+                .format()
+        }
+
+        return GroupManagerV2.ConfirmDialogData(
+            title = application.getString(title),
+            message = message,
+            positiveText = positiveButton,
+            negativeText = R.string.cancel,
+            positiveQaTag = positiveQaTag,
+            negativeQaTag = negativeQaTag,
+            negativePlurals = negativePlurals
+        )
+    }
+
+    override fun isCurrentUserLastAdmin(groupId: AccountId): Boolean {
+        val currentUserId = checkNotNull(storage.getUserPublicKey()) { "User public key is null" }
+
+        val membersWithStatus = configFactory.withGroupConfigs(groupId) {
+            it.groupMembers.allWithStatus()
+        }
+
+        var adminCount = 0
+        var amAdmin = false
+
+        for ((member, status) in membersWithStatus) {
+            val isAdminLike = member.isAdminOrBeingPromoted(status) && !member.isRemoved(status)
+            if (!isAdminLike) continue
+
+            adminCount++
+
+            if (member.accountId() == currentUserId) {
+                amAdmin = true
+            }
+        }
+
+        return amAdmin && adminCount == 1
     }
 
     private fun BatchResponse.requireAllRequestsSuccessful(errorMessage: String) {
