@@ -287,7 +287,7 @@ class ConversationSettingsViewModel @AssistedInject constructor(
         OptionsItem(
             name = context.getString(R.string.manageAdmins),
             icon = R.drawable.ic_add_admin_custom,
-            qaTag = R.string.qa_conversation_settings_manage_members,
+            qaTag = R.string.qa_conversation_settings_manage_admins,
             onClick = {
                 (address as? Address.Group)?.let {
                     navigateTo(ConversationSettingsDestination.RouteManageAdmins(it))
