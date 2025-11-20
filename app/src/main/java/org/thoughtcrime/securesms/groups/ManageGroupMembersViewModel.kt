@@ -155,15 +155,13 @@ class ManageGroupMembersViewModel @AssistedInject constructor(
     }
 
     fun onSendInviteClicked(contacts: Set<Address>, shareHistory : Boolean) {
-        _uiState.update {
-            it.copy(
-                ongoingAction = context.resources.getQuantityString(
-                    R.plurals.groupInviteSending,
-                    contacts.size,
-                    contacts.size
-                )
-            )
-        }
+        val sendInviteText = context.resources.getQuantityString(
+            R.plurals.groupInviteSending,
+            contacts.size,
+            contacts.size
+        )
+
+        showToast(sendInviteText)
 
         performGroupOperation(
             showLoading = false,
@@ -207,13 +205,13 @@ class ManageGroupMembersViewModel @AssistedInject constructor(
 
             removeSearchState(true)
 
-            _uiState.update { it ->
-                it.copy(error = context.resources.getQuantityString(
-                    R.plurals.resendingInvite,
-                    invites.size,
-                    invites.size
-                ))
-            }
+            val errorText = context.resources.getQuantityString(
+                R.plurals.resendingInvite,
+                invites.size,
+                invites.size
+            )
+
+            showToast(errorText)
 
             // Reinvite with per-member shareHistory
             groupManager.reinviteMembers(
@@ -232,20 +230,13 @@ class ManageGroupMembersViewModel @AssistedInject constructor(
         }
     }
 
-    fun onPromoteContact(memberSessionId: AccountId) {
-        performGroupOperation(showLoading = false) {
-            groupManager.promoteMember(groupId, listOf(memberSessionId), isRepromote = false)
-        }
-    }
-
     fun onRemoveContact(removeMessages: Boolean) {
-        _uiState.update { it ->
-            it.copy(ongoingAction =context.resources.getQuantityString(
-                R.plurals.removingMember,
-                selectedMembers.value.size,
-                selectedMembers.value.size
-            ))
-        }
+        val removeText = context.resources.getQuantityString(
+            R.plurals.removingMember,
+            selectedMembers.value.size,
+            selectedMembers.value.size
+        )
+        showToast(removeText)
 
         performGroupOperation(showLoading = false) {
             val accountIdList = selectedMembers.value.map { it.accountId }
@@ -258,10 +249,6 @@ class ManageGroupMembersViewModel @AssistedInject constructor(
                 removeMessages = removeMessages
             )
         }
-    }
-
-    fun onDismissError() {
-        _uiState.update { it.copy(error = null) }
     }
 
     /**
@@ -289,12 +276,9 @@ class ManageGroupMembersViewModel @AssistedInject constructor(
             try {
                 task.await()
             } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        error = errorMessage?.invoke(e)
-                            ?: context.getString(R.string.errorUnknown)
-                    )
-                }
+                val error = errorMessage?.invoke(e)
+                    ?: context.getString(R.string.errorUnknown)
+                showToast(error)
             } finally {
                 if (showLoading) {
                     _uiState.update { it.copy(inProgress = false) }
@@ -309,10 +293,6 @@ class ManageGroupMembersViewModel @AssistedInject constructor(
 
     fun toggleFooter() {
         footerCollapsed.update { !it }
-    }
-
-    fun onDismissResend() {
-        _uiState.update { it.copy(ongoingAction = null) }
     }
 
     private fun toggleRemoveMembersDialog(visible : Boolean){
@@ -332,10 +312,6 @@ class ManageGroupMembersViewModel @AssistedInject constructor(
             is Commands.CloseFooter -> clearSelection()
 
             is Commands.ToggleFooter -> toggleFooter()
-
-            is Commands.DismissError -> onDismissError()
-
-            is Commands.DismissResend -> onDismissResend()
 
             is Commands.MemberClick -> onMemberItemClicked(command.member)
 
@@ -435,8 +411,6 @@ class ManageGroupMembersViewModel @AssistedInject constructor(
         val adminOptions : List<OptionsItem> = emptyList(),
 
         val inProgress: Boolean = false,
-        val error: String? = null,
-        val ongoingAction: String? = null,
 
         // search UI state:
         val searchQuery: String = "",
@@ -473,10 +447,6 @@ class ManageGroupMembersViewModel @AssistedInject constructor(
     sealed interface Commands {
         data object ShowRemoveMembersDialog : Commands
         data object DismissRemoveMembersDialog : Commands
-
-        data object DismissError : Commands
-
-        data object DismissResend : Commands
 
         data object ToggleFooter : Commands
 

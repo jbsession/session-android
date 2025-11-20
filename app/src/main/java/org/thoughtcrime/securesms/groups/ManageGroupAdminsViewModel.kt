@@ -131,13 +131,13 @@ class ManageGroupAdminsViewModel @AssistedInject constructor(
 
             removeSearchState(clearSelection = true)
 
-            val resendingString = context.resources.getQuantityString(
+            val resendingText = context.resources.getQuantityString(
                 R.plurals.resendingPromotion,
                 accountIds.size,
                 accountIds.size
             )
 
-            showToast(resendingString)
+            showToast(resendingText)
 
             groupManager.promoteMember(
                 groupId,
@@ -245,12 +245,6 @@ class ManageGroupAdminsViewModel @AssistedInject constructor(
             is Commands.SearchFocusChange -> onSearchFocusChanged(command.focus)
             is Commands.SearchQueryChange -> onSearchQueryChanged(command.query)
         }
-    }
-
-    private fun showToast(text: String) {
-        Toast.makeText(
-            context, text, Toast.LENGTH_SHORT
-        ).show()
     }
 
     data class UiState(

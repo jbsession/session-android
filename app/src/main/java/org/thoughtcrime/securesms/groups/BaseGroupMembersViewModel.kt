@@ -1,6 +1,7 @@
 package org.thoughtcrime.securesms.groups
 
 import android.content.Context
+import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -213,6 +214,12 @@ abstract class BaseGroupMembersViewModel(
                 .thenComparing(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
                 .thenBy { it.accountId }
         )
+
+    fun showToast(text: String) {
+        Toast.makeText(
+            context, text, Toast.LENGTH_SHORT
+        ).show()
+    }
 }
 
 private fun stateOrder(status: GroupMember.Status?): Int = when (status) {

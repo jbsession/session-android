@@ -157,10 +157,6 @@ class PromoteMembersViewModel @AssistedInject constructor(
         }
     }
 
-    private fun showToast(text : String){
-        Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
-    }
-
     private fun buildFooterState(
         selected: Set<GroupMemberState>,
         isCollapsed: Boolean
