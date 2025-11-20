@@ -94,8 +94,6 @@ fun ManageAdmins(
 ) {
 
     val searchFocused = uiState.isSearchFocused
-    val showingError = uiState.error
-    val showingOngoingAction = uiState.ongoingAction
 
     val handleBack: () -> Unit = {
         when {
@@ -251,21 +249,6 @@ fun ManageAdmins(
 
     if (uiState.inProgress) {
         LoadingDialog()
-    }
-
-    val context = LocalContext.current
-
-    LaunchedEffect(showingError) {
-        if (showingError != null) {
-            Toast.makeText(context, showingError, Toast.LENGTH_SHORT).show()
-            sendCommand(DismissError)
-        }
-    }
-    LaunchedEffect(showingOngoingAction) {
-        if (showingOngoingAction != null) {
-            Toast.makeText(context, showingOngoingAction, Toast.LENGTH_SHORT).show()
-            sendCommand(DismissResend)
-        }
     }
 }
 

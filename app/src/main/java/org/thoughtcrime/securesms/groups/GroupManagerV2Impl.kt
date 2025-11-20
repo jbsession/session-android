@@ -1219,12 +1219,10 @@ class GroupManagerV2Impl @Inject constructor(
         groupId: AccountId,
         name: String
     ): GroupManagerV2.ConfirmDialogData? {
-        val groupData = configFactory.getGroup(groupId) ?: return null
-
         val title = R.string.groupLeave
         var message: CharSequence = ""
         var positiveButton = R.string.leave
-        var negativePlurals : Int? = null
+        var negativeButton = R.string.cancel
         var positiveQaTag = R.string.qa_conversation_settings_dialog_leave_group_confirm
         var negativeQaTag = R.string.qa_conversation_settings_dialog_leave_group_cancel
 
@@ -1232,8 +1230,8 @@ class GroupManagerV2Impl @Inject constructor(
             message = Phrase.from(application, R.string.groupOnlyAdmin)
                 .put(GROUP_NAME_KEY, name)
                 .format()
-            positiveButton = R.string.groupDelete
-            negativePlurals = R.plurals.addAdmin
+            positiveButton = R.string.addAdmins
+            negativeButton = R.string.groupDelete
         } else {
             message = Phrase.from(application, R.string.groupLeaveDescription)
                 .put(GROUP_NAME_KEY, name)
@@ -1244,10 +1242,9 @@ class GroupManagerV2Impl @Inject constructor(
             title = application.getString(title),
             message = message,
             positiveText = positiveButton,
-            negativeText = R.string.cancel,
+            negativeText = negativeButton,
             positiveQaTag = positiveQaTag,
             negativeQaTag = negativeQaTag,
-            negativePlurals = negativePlurals
         )
     }
 

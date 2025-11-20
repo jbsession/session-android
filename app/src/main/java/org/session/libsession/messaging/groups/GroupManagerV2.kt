@@ -134,7 +134,6 @@ interface GroupManagerV2 {
         val message: CharSequence,
         @StringRes val positiveText: Int,
         @StringRes val negativeText: Int,
-        @StringRes val negativePlurals : Int? = null,
         @StringRes val positiveQaTag: Int?,
         @StringRes val negativeQaTag: Int?,
     )

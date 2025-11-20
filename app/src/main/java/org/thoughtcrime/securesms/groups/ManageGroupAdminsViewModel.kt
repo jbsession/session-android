@@ -1,6 +1,7 @@
 package org.thoughtcrime.securesms.groups
 
 import android.content.Context
+import android.widget.Toast
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.lifecycle.viewModelScope
@@ -130,15 +131,13 @@ class ManageGroupAdminsViewModel @AssistedInject constructor(
 
             removeSearchState(clearSelection = true)
 
-            _uiState.update {
-                it.copy(
-                    ongoingAction = context.resources.getQuantityString(
-                        R.plurals.resendingPromotion,
-                        accountIds.size,
-                        accountIds.size
-                    )
-                )
-            }
+            val resendingString = context.resources.getQuantityString(
+                R.plurals.resendingPromotion,
+                accountIds.size,
+                accountIds.size
+            )
+
+            showToast(resendingString)
 
             groupManager.promoteMember(
                 groupId,
@@ -165,14 +164,6 @@ class ManageGroupAdminsViewModel @AssistedInject constructor(
         footerCollapsed.update { !it }
     }
 
-    fun onDismissError() {
-        _uiState.update { it.copy(error = null) }
-    }
-
-    fun onDismissResend() {
-        _uiState.update { it.copy(ongoingAction = null) }
-    }
-
     /**
      * Shared helper for group operations (same pattern with ManageGroupMembersViewModel).
      */
@@ -194,12 +185,9 @@ class ManageGroupAdminsViewModel @AssistedInject constructor(
             try {
                 task.await()
             } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        error = errorMessage?.invoke(e)
-                            ?: context.getString(R.string.errorUnknown)
-                    )
-                }
+                val error = errorMessage?.invoke(e)
+                    ?: context.getString(R.string.errorUnknown)
+                showToast(error)
             } finally {
                 if (showLoading) {
                     _uiState.update { it.copy(inProgress = false) }
@@ -248,16 +236,10 @@ class ManageGroupAdminsViewModel @AssistedInject constructor(
 
     fun onCommand(command: Commands) {
         when (command) {
-            is Commands.DismissError -> onDismissError()
-            is Commands.DismissResend -> onDismissResend()
             is Commands.ToggleFooter -> toggleFooter()
             is Commands.CloseFooter,
             is Commands.ClearSelection -> clearSelection()
-            is Commands.SelfClick -> {
-                _uiState.update {
-                    it.copy(error = context.getString(R.string.adminStatusYou))
-                }
-            }
+            is Commands.SelfClick ->  showToast(context.getString(R.string.adminStatusYou))
             is Commands.MemberClick -> onAdminItemClicked(command.member)
             is Commands.RemoveSearchState -> removeSearchState(command.clearSelection)
             is Commands.SearchFocusChange -> onSearchFocusChanged(command.focus)
@@ -265,12 +247,16 @@ class ManageGroupAdminsViewModel @AssistedInject constructor(
         }
     }
 
+    private fun showToast(text: String) {
+        Toast.makeText(
+            context, text, Toast.LENGTH_SHORT
+        ).show()
+    }
+
     data class UiState(
         val options: List<OptionsItem> = emptyList(),
 
         val inProgress: Boolean = false,
-        val error: String? = null,
-        val ongoingAction: String? = null,
 
         // search UI state:
         val searchQuery: String = "",
@@ -295,9 +281,6 @@ class ManageGroupAdminsViewModel @AssistedInject constructor(
     )
 
     sealed interface Commands {
-        data object DismissError : Commands
-        data object DismissResend : Commands
-
         data object ToggleFooter : Commands
         data object CloseFooter : Commands
         data object ClearSelection : Commands

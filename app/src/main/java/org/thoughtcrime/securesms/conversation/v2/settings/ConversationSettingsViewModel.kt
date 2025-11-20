@@ -1050,15 +1050,19 @@ class ConversationSettingsViewModel @AssistedInject constructor(
                     title = dialogData.title,
                     message = dialogData.message,
                     positiveText = context.getString(dialogData.positiveText),
-                    negativeText = dialogData.negativePlurals?.let {
-                        context.resources.getQuantityString(it, 1, 1)
-                    } ?: context.getString(dialogData.negativeText),
+                    negativeText = context.getString(dialogData.negativeText),
                     positiveQaTag = dialogData.positiveQaTag?.let { context.getString(it) },
                     negativeQaTag = dialogData.negativeQaTag?.let { context.getString(it) },
-                    onPositive = {if(isUserLastAdmin) confirmLeaveGroup() else leaveGroup()},
-                    onNegative = {if(isUserLastAdmin)
-                        navigateTo(ConversationSettingsDestination.RoutePromoteMembers(address))
-                    }
+                    onPositive = {
+                        if (isUserLastAdmin)
+                            navigateTo(ConversationSettingsDestination.RoutePromoteMembers(address))
+                        else leaveGroup()
+                    },
+                    positiveStyleDanger = !isUserLastAdmin,
+                    onNegative = {
+                        if (isUserLastAdmin) confirmLeaveGroup()
+                    },
+                    negativeStyleDanger = isUserLastAdmin // red color on the right
                 )
             )
         }
@@ -1078,9 +1082,7 @@ class ConversationSettingsViewModel @AssistedInject constructor(
                     title = dialogData.title,
                     message = dialogData.message,
                     positiveText = context.getString(dialogData.positiveText),
-                    negativeText = dialogData.negativePlurals?.let {
-                        context.resources.getQuantityString(it, 1, 1)
-                    } ?: context.getString(dialogData.negativeText),
+                    negativeText = context.getString(dialogData.negativeText),
                     positiveQaTag = dialogData.positiveQaTag?.let { context.getString(it) },
                     negativeQaTag = dialogData.negativeQaTag?.let { context.getString(it) },
                     onPositive = ::leaveGroup,
