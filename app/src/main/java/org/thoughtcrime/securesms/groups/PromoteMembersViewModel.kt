@@ -117,43 +117,24 @@ class PromoteMembersViewModel @AssistedInject constructor(
         val selected = selectedMembers.value
         if (selected.isEmpty()) return
 
-        performGroupOperation() {
-            val accountIds = selected.map { it.accountId }
+        val accountIds = selected.map { it.accountId }
 
+        val promoteText = context.resources.getQuantityString(
+            R.plurals.resendingInvite,
+            selectedMembers.value.size,
+            selectedMembers.value.size
+        )
+
+        showToast(promoteText)
+
+        performGroupOperationCore {
             removeSearchState(clearSelection = true)
-
-            val promoteText = context.resources.getQuantityString(
-                R.plurals.resendingInvite,
-                selectedMembers.value.size,
-                selectedMembers.value.size
-            )
-
-            showToast(promoteText)
 
             groupManager.promoteMember(
                 groupId,
                 accountIds,
                 isRepromote = false
             )
-        }
-    }
-
-    private fun performGroupOperation(
-        errorMessage: ((Throwable) -> String?)? = null,
-        operation: suspend () -> Unit
-    ) {
-        viewModelScope.launch {
-            @Suppress("OPT_IN_USAGE")
-            val task = GlobalScope.async {
-                operation()
-            }
-
-            try {
-                task.await()
-            } catch (e: Exception) {
-                showToast(errorMessage?.invoke(e)
-                    ?: context.getString(R.string.errorUnknown))
-            }
         }
     }
 

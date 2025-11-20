@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -17,6 +19,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import network.loki.messenger.R
 import network.loki.messenger.libsession_util.allWithStatus
@@ -219,6 +222,38 @@ abstract class BaseGroupMembersViewModel(
         Toast.makeText(
             context, text, Toast.LENGTH_SHORT
         ).show()
+    }
+
+    /**
+     * Perform a group operation, such as inviting a member, removing a member.
+     *
+     * This is a helper function that encapsulates the common error handling and progress tracking.
+     */
+    protected fun performGroupOperationCore(
+        showLoading: Boolean = false,
+        setLoading: (Boolean) -> Unit = {},
+        errorMessage: ((Throwable) -> String?)? = null,
+        operation: suspend () -> Unit
+    ) {
+        viewModelScope.launch {
+            if (showLoading) setLoading(true)
+
+            // We need to use GlobalScope here because we don't want
+            // any group operation to be cancelled when the view model is cleared.
+            @Suppress("OPT_IN_USAGE")
+            val task = GlobalScope.async {
+                operation()
+            }
+
+            try {
+                task.await()
+            } catch (e: Throwable) {
+                val msg = errorMessage?.invoke(e) ?: context.getString(R.string.errorUnknown)
+                showToast(msg)
+            } finally {
+                if (showLoading) setLoading(false)
+            }
+        }
     }
 }
 

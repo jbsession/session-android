@@ -10,6 +10,7 @@ import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import network.loki.messenger.R
 import network.loki.messenger.libsession_util.getOrNull
 import org.session.libsession.database.StorageProtocol
@@ -163,8 +165,9 @@ class ManageGroupMembersViewModel @AssistedInject constructor(
 
         showToast(sendInviteText)
 
-        performGroupOperation(
+        performGroupOperationCore(
             showLoading = false,
+            setLoading = ::setLoading,
             errorMessage = { err ->
                 if (err is GroupInviteException) {
                     err.format(context, recipientRepository).toString()
@@ -184,8 +187,9 @@ class ManageGroupMembersViewModel @AssistedInject constructor(
 
     fun onResendInviteClicked() {
         if (selectedMembers.value.isEmpty()) return
-        performGroupOperation(
+        performGroupOperationCore(
             showLoading = false,
+            setLoading = ::setLoading,
             errorMessage = { err ->
                 if (err is GroupInviteException) {
                     err.format(context, recipientRepository).toString()
@@ -211,7 +215,10 @@ class ManageGroupMembersViewModel @AssistedInject constructor(
                 invites.size
             )
 
-            showToast(errorText)
+            // is it better move the invites list outside the operation?
+            withContext(Dispatchers.Main) {
+                showToast(errorText) // now safely on main thread
+            }
 
             // Reinvite with per-member shareHistory
             groupManager.reinviteMembers(
@@ -236,9 +243,10 @@ class ManageGroupMembersViewModel @AssistedInject constructor(
             selectedMembers.value.size,
             selectedMembers.value.size
         )
+
         showToast(removeText)
 
-        performGroupOperation(showLoading = false) {
+        performGroupOperationCore(showLoading = false, setLoading = ::setLoading) {
             val accountIdList = selectedMembers.value.map { it.accountId }
 
             removeSearchState(true)
@@ -248,42 +256,6 @@ class ManageGroupMembersViewModel @AssistedInject constructor(
                 removedMembers = accountIdList,
                 removeMessages = removeMessages
             )
-        }
-    }
-
-    /**
-     * Perform a group operation, such as inviting a member, removing a member.
-     *
-     * This is a helper function that encapsulates the common error handling and progress tracking.
-     */
-    private fun performGroupOperation(
-        showLoading: Boolean = true,
-        errorMessage: ((Throwable) -> String?)? = null,
-        operation: suspend () -> Unit
-    ) {
-        viewModelScope.launch {
-            if (showLoading) {
-                _uiState.update { it.copy(inProgress = true) }
-            }
-
-            // We need to use GlobalScope here because we don't want
-            // any group operation to be cancelled when the view model is cleared.
-            @Suppress("OPT_IN_USAGE")
-            val task = GlobalScope.async {
-                operation()
-            }
-
-            try {
-                task.await()
-            } catch (e: Exception) {
-                val error = errorMessage?.invoke(e)
-                    ?: context.getString(R.string.errorUnknown)
-                showToast(error)
-            } finally {
-                if (showLoading) {
-                    _uiState.update { it.copy(inProgress = false) }
-                }
-            }
         }
     }
 
@@ -297,6 +269,10 @@ class ManageGroupMembersViewModel @AssistedInject constructor(
 
     private fun toggleRemoveMembersDialog(visible : Boolean){
         showRemoveMembersDialog.value = visible
+    }
+
+    private fun setLoading(isLoading : Boolean){
+        _uiState.update { it.copy(inProgress = true) }
     }
 
     fun onCommand(command: Commands) {

@@ -119,6 +119,10 @@ class ManageGroupAdminsViewModel @AssistedInject constructor(
         }
     }
 
+    private fun setLoading(isLoading : Boolean){
+        _uiState.update { it.copy(inProgress = isLoading) }
+    }
+
     /**
      * Send promotions to all selected admins.
      */
@@ -126,18 +130,19 @@ class ManageGroupAdminsViewModel @AssistedInject constructor(
         val selected = selectedAdmins.value
         if (selected.isEmpty()) return
 
-        performGroupOperation(showLoading = false) {
-            val accountIds = selected.map { it.accountId }
+        val accountIds = selected.map { it.accountId }
 
+        val resendingText = context.resources.getQuantityString(
+            R.plurals.resendingPromotion,
+            accountIds.size,
+            accountIds.size
+        )
+
+        showToast(resendingText)
+
+        performGroupOperationCore(showLoading = false
+        , setLoading = ::setLoading) {
             removeSearchState(clearSelection = true)
-
-            val resendingText = context.resources.getQuantityString(
-                R.plurals.resendingPromotion,
-                accountIds.size,
-                accountIds.size
-            )
-
-            showToast(resendingText)
 
             groupManager.promoteMember(
                 groupId,
@@ -162,38 +167,6 @@ class ManageGroupAdminsViewModel @AssistedInject constructor(
 
     fun toggleFooter() {
         footerCollapsed.update { !it }
-    }
-
-    /**
-     * Shared helper for group operations (same pattern with ManageGroupMembersViewModel).
-     */
-    private fun performGroupOperation(
-        showLoading: Boolean = true,
-        errorMessage: ((Throwable) -> String?)? = null,
-        operation: suspend () -> Unit
-    ) {
-        viewModelScope.launch {
-            if (showLoading) {
-                _uiState.update { it.copy(inProgress = true) }
-            }
-
-            @Suppress("OPT_IN_USAGE")
-            val task = GlobalScope.async {
-                operation()
-            }
-
-            try {
-                task.await()
-            } catch (e: Exception) {
-                val error = errorMessage?.invoke(e)
-                    ?: context.getString(R.string.errorUnknown)
-                showToast(error)
-            } finally {
-                if (showLoading) {
-                    _uiState.update { it.copy(inProgress = false) }
-                }
-            }
-        }
     }
 
     private fun buildFooterState(
