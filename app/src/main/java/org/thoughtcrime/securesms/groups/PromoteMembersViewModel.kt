@@ -1,6 +1,7 @@
 package org.thoughtcrime.securesms.groups
 
 import android.content.Context
+import android.widget.Toast
 import androidx.lifecycle.viewModelScope
 import com.squareup.phrase.Phrase
 import dagger.assisted.Assisted
@@ -121,15 +122,13 @@ class PromoteMembersViewModel @AssistedInject constructor(
 
             removeSearchState(clearSelection = true)
 
-            _uiState.update {
-                it.copy(
-                    toast = context.resources.getQuantityString(
-                        R.plurals.resendingInvite,
-                        selectedMembers.value.size,
-                        selectedMembers.value.size
-                    )
-                )
-            }
+            val promoteText = context.resources.getQuantityString(
+                R.plurals.resendingInvite,
+                selectedMembers.value.size,
+                selectedMembers.value.size
+            )
+
+            showToast(promoteText)
 
             groupManager.promoteMember(
                 groupId,
@@ -152,14 +151,14 @@ class PromoteMembersViewModel @AssistedInject constructor(
             try {
                 task.await()
             } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        toast = errorMessage?.invoke(e)
-                            ?: context.getString(R.string.errorUnknown)
-                    )
-                }
+                showToast(errorMessage?.invoke(e)
+                    ?: context.getString(R.string.errorUnknown))
             }
         }
+    }
+
+    private fun showToast(text : String){
+        Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
     }
 
     private fun buildFooterState(
@@ -245,10 +244,6 @@ class PromoteMembersViewModel @AssistedInject constructor(
                 _uiState.update { it.copy(showConfirmDialog = false) }
             }
 
-            is Commands.DismissToast -> {
-                _uiState.update { it.copy(toast = null) }
-            }
-
             is Commands.SendPromotionInvites -> sendPromotionInvites()
 
             is Commands.ToggleFooter -> toggleFooter()
@@ -273,8 +268,6 @@ class PromoteMembersViewModel @AssistedInject constructor(
         data object ShowConfirmDialog : Commands
         data object DismissConfirmDialog : Commands
 
-        data object DismissToast : Commands
-
         data object SendPromotionInvites : Commands
 
         data object ToggleFooter : Commands
@@ -289,8 +282,6 @@ class PromoteMembersViewModel @AssistedInject constructor(
     }
 
     data class UiState(
-        val toast: String? = null,
-
         // search UI state:
         val searchQuery: String = "",
         val isSearchFocused: Boolean = false,

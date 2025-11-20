@@ -211,16 +211,6 @@ fun PromoteMembers(
     if (uiState.showPromoteDialog) {
         PromotionDialog(sendCommand = sendCommand, bodyText = uiState.promoteDialogBody)
     }
-
-
-    val context = LocalContext.current
-
-    LaunchedEffect(uiState.toast) {
-        if (!uiState.toast.isNullOrEmpty()) {
-            Toast.makeText(context, uiState.toast, Toast.LENGTH_SHORT).show()
-            sendCommand(Commands.DismissToast)
-        }
-    }
 }
 
 @Composable
