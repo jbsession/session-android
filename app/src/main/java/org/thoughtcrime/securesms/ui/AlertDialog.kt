@@ -213,8 +213,8 @@ fun AlertDialogContent(
                             color = it.color,
                             enabled = it.enabled
                         ) {
-                            it.onClick()
                             if (it.dismissOnClick) onDismissRequest()
+                            it.onClick()
                         }
                     }
                 }
