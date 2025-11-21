@@ -1,6 +1,5 @@
 package org.thoughtcrime.securesms.groups.compose
 
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,11 +23,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -46,7 +43,6 @@ import org.thoughtcrime.securesms.groups.PromoteMembersViewModel.Commands.Search
 import org.thoughtcrime.securesms.groups.PromoteMembersViewModel.Commands.ShowConfirmDialog
 import org.thoughtcrime.securesms.groups.PromoteMembersViewModel.Commands.ShowPromoteDialog
 import org.thoughtcrime.securesms.groups.PromoteMembersViewModel.Commands.ToggleFooter
-import org.thoughtcrime.securesms.groups.PromoteMembersViewModel.Commands.SendPromotionInvites
 import org.thoughtcrime.securesms.ui.AlertDialog
 import org.thoughtcrime.securesms.ui.CollapsibleFooterAction
 import org.thoughtcrime.securesms.ui.CollapsibleFooterActionData
@@ -64,6 +60,7 @@ import org.thoughtcrime.securesms.ui.theme.LocalType
 fun PromoteMembersScreen(
     viewModel: PromoteMembersViewModel,
     onBack: () -> Unit,
+    onPromoteClicked: (Set<GroupMemberState>) -> Unit
 ) {
     val uiState = viewModel.uiState.collectAsState().value
     val searchQuery = viewModel.searchQuery.collectAsState().value
@@ -78,7 +75,8 @@ fun PromoteMembersScreen(
         sendCommand = viewModel::onCommand,
         members = members,
         selectedMembers = selectedMembers,
-        hasActiveMembers = hasActiveMembers
+        hasActiveMembers = hasActiveMembers,
+        onPromoteClicked = onPromoteClicked
     )
 }
 
@@ -91,7 +89,8 @@ fun PromoteMembers(
     sendCommand: (command: Commands) -> Unit,
     members: List<GroupMemberState>,
     selectedMembers: Set<GroupMemberState> = emptySet(),
-    hasActiveMembers: Boolean = false
+    hasActiveMembers: Boolean = false,
+    onPromoteClicked: (Set<GroupMemberState>) -> Unit
 ) {
     val searchFocused = uiState.isSearchFocused
 
@@ -202,10 +201,7 @@ fun PromoteMembers(
     if (uiState.showConfirmDialog) {
         ConfirmDialog(
             sendCommand = sendCommand,
-            onConfirmClicked = {
-                sendCommand(SendPromotionInvites)
-                onBack()
-            })
+            onConfirmClicked = { onPromoteClicked(selectedMembers) })
     }
 
     if (uiState.showPromoteDialog) {

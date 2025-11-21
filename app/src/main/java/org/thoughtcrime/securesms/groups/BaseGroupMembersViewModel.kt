@@ -248,8 +248,6 @@ abstract class BaseGroupMembersViewModel(
 
             try {
                 task.await()
-            } catch (e: CancellationException) {
-                return@launch
             } catch (e: Throwable) {
                 val msg = errorMessage?.invoke(e) ?: context.getString(R.string.errorUnknown)
                 showToast(msg)

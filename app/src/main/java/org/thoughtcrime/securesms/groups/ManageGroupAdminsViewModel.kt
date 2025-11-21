@@ -125,13 +125,27 @@ class ManageGroupAdminsViewModel @AssistedInject constructor(
     }
 
     /**
-     * Send promotions to all selected admins.
+     * Send promotions to all selected admins (explicit selection from caller).
      */
-    fun onSendPromotionsClicked(isResend : Boolean) {
-        val selected = selectedAdmins.value
-        if (selected.isEmpty()) return
+    fun onSendPromotionsClicked(selectedAdmins: Set<GroupMemberState>) {
+        sendPromotions(members = selectedAdmins, isRepromote = false)
+    }
 
-        val accountIds = selected.map { it.accountId }
+    /**
+     * Resend promotions using locally selected admins.
+     * Used in the parent screen with admin list
+     */
+    fun onResendPromotionsClicked() {
+        sendPromotions(isRepromote = true)
+    }
+
+    private fun sendPromotions(
+        members: Set<GroupMemberState> = selectedAdmins.value,
+        isRepromote: Boolean
+    ) {
+        if (members.isEmpty()) return
+
+        val accountIds = members.map { it.accountId }
 
         val resendingText = context.resources.getQuantityString(
             R.plurals.resendingPromotion,
@@ -142,20 +156,22 @@ class ManageGroupAdminsViewModel @AssistedInject constructor(
         showToast(resendingText)
 
         performGroupOperationCore(
-            showLoading = false, setLoading = ::setLoading,
+            showLoading = false,
+            setLoading = ::setLoading,
             errorMessage = { err ->
                 if (err is GroupInviteException) {
                     err.format(context, recipientRepository).toString()
                 } else {
                     null
                 }
-            }) {
+            }
+        ) {
             removeSearchState(clearSelection = true)
 
             groupManager.promoteMember(
                 groupId,
                 accountIds,
-                isRepromote = isResend
+                isRepromote = isRepromote
             )
         }
     }
@@ -203,7 +219,7 @@ class ManageGroupAdminsViewModel @AssistedInject constructor(
                 ),
                 buttonLabel = GetString(context.getString(R.string.resend)),
                 isDanger = false,
-                onClick = { onSendPromotionsClicked(true) }
+                onClick = { onResendPromotionsClicked() }
             )
         )
 

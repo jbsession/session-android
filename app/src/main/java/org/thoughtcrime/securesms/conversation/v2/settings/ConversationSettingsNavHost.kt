@@ -386,11 +386,22 @@ fun ConversationSettingsNavHost(
                         factory.create(groupAddress = data.groupAddress)
                     }
 
+                val parentEntry = remember(backStackEntry) {
+                    navController.getBackStackEntry(
+                        RouteManageAdmins(data.groupAddress)
+                    )
+                }
+                val manageGroupAdminsViewModel: ManageGroupAdminsViewModel = hiltViewModel(parentEntry)
+
                 PromoteMembersScreen(
                     viewModel = viewModel,
                     onBack = dropUnlessResumed {
                         handleBack()
                     },
+                    onPromoteClicked = { selectedMembers ->
+                        manageGroupAdminsViewModel.onSendPromotionsClicked(selectedMembers)
+                        handleBack()
+                    }
                 )
             }
 

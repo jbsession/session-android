@@ -114,39 +114,6 @@ class PromoteMembersViewModel @AssistedInject constructor(
         _mutableSelectedMembers.value = emptySet()
     }
 
-    fun sendPromotionInvites(){
-        val selected = selectedMembers.value
-        if (selected.isEmpty()) return
-
-        val accountIds = selected.map { it.accountId }
-
-        val promoteText = context.resources.getQuantityString(
-            R.plurals.resendingInvite,
-            selectedMembers.value.size,
-            selectedMembers.value.size
-        )
-
-        showToast(promoteText)
-
-        performGroupOperationCore(
-            errorMessage = { err ->
-                if (err is GroupInviteException) {
-                    err.format(context, recipientRepository).toString()
-                } else {
-                    null
-                }
-            }
-        ) {
-            removeSearchState(clearSelection = true,)
-
-            groupManager.promoteMember(
-                groupId,
-                accountIds,
-                isRepromote = false
-            )
-        }
-    }
-
     private fun buildFooterState(
         selected: Set<GroupMemberState>,
         isCollapsed: Boolean
@@ -230,8 +197,6 @@ class PromoteMembersViewModel @AssistedInject constructor(
                 _uiState.update { it.copy(showConfirmDialog = false) }
             }
 
-            is Commands.SendPromotionInvites -> sendPromotionInvites()
-
             is Commands.ToggleFooter -> toggleFooter()
 
             is Commands.CloseFooter,
@@ -253,8 +218,6 @@ class PromoteMembersViewModel @AssistedInject constructor(
 
         data object ShowConfirmDialog : Commands
         data object DismissConfirmDialog : Commands
-
-        data object SendPromotionInvites : Commands
 
         data object ToggleFooter : Commands
         data object CloseFooter : Commands
