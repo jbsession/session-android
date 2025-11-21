@@ -560,18 +560,17 @@ class GroupManagerV2Impl @Inject constructor(
                 }
             }
 
-            // Wait and gather all the promote message sending result into a result map
             val promotedByMemberIDs = promotionDeferred
-                .mapValues {
-                    runCatching { it.value.await() }.isSuccess
+                .mapValues { (_, deferred) ->
+                    runCatching { deferred.await() }
                 }
 
             // Update each member's status
             configFactory.withMutableGroupConfigs(group) { configs ->
                 promotedByMemberIDs.asSequence()
-                    .mapNotNull { (member, success) ->
+                    .mapNotNull { (member, result) ->
                         configs.groupMembers.get(member.hexString)?.apply {
-                            if (success) {
+                            if (result.isSuccess) {
                                 setPromotionSent()
                             } else {
                                 setPromotionFailed()
@@ -581,6 +580,25 @@ class GroupManagerV2Impl @Inject constructor(
                     .forEach(configs.groupMembers::set)
             }
 
+            val failedMembers = promotedByMemberIDs
+                .filterValues { it.isFailure }
+                .keys
+                .toList()
+
+            if (failedMembers.isNotEmpty()) {
+                val cause = promotedByMemberIDs.values
+                    .firstOrNull { it.isFailure }
+                    ?.exceptionOrNull()
+                    ?: RuntimeException("Failed to promote ${failedMembers.size} member(s)")
+
+                throw GroupInviteException(
+                    isPromotion = true,
+                    inviteeAccountIds = failedMembers.map { it.hexString },
+                    groupName = groupName ?: "",
+                    isReinvite = isRepromote,
+                    underlying = cause
+                )
+            }
 
             if (!isRepromote) {
                 messageSender.sendAndAwait(message, Address.fromSerialized(group.hexString))

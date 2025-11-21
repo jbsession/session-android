@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import network.loki.messenger.R
 import org.session.libsession.database.StorageProtocol
+import org.session.libsession.messaging.groups.GroupInviteException
 import org.session.libsession.messaging.groups.GroupManagerV2
 import org.session.libsession.utilities.Address
 import org.session.libsession.utilities.ConfigFactoryProtocol
@@ -127,8 +128,16 @@ class PromoteMembersViewModel @AssistedInject constructor(
 
         showToast(promoteText)
 
-        performGroupOperationCore {
-            removeSearchState(clearSelection = true)
+        performGroupOperationCore(
+            errorMessage = { err ->
+                if (err is GroupInviteException) {
+                    err.format(context, recipientRepository).toString()
+                } else {
+                    null
+                }
+            }
+        ) {
+            removeSearchState(clearSelection = true,)
 
             groupManager.promoteMember(
                 groupId,

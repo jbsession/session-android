@@ -38,6 +38,7 @@ import org.thoughtcrime.securesms.database.RecipientRepository
 import org.thoughtcrime.securesms.util.AvatarUIData
 import org.thoughtcrime.securesms.util.AvatarUtils
 import java.util.EnumSet
+import kotlin.coroutines.cancellation.CancellationException
 
 abstract class BaseGroupMembersViewModel(
     groupAddress: Address.Group,
@@ -247,6 +248,8 @@ abstract class BaseGroupMembersViewModel(
 
             try {
                 task.await()
+            } catch (e: CancellationException) {
+                return@launch
             } catch (e: Throwable) {
                 val msg = errorMessage?.invoke(e) ?: context.getString(R.string.errorUnknown)
                 showToast(msg)
