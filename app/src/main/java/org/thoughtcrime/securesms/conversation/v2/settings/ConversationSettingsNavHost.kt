@@ -391,7 +391,7 @@ fun ConversationSettingsNavHost(
                     }
 
                 val parentEntry = remember(backStackEntry) {
-                    navController.previousBackStackEntry ?: error("")
+                    navController.previousBackStackEntry ?: error("RouteManageAdmin not in backstack")
                 }
                 val manageGroupAdminsViewModel: ManageGroupAdminsViewModel = hiltViewModel(parentEntry)
 
