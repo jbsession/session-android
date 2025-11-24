@@ -1,7 +1,6 @@
 package org.thoughtcrime.securesms.groups
 
 import android.content.Context
-import android.widget.Toast
 import androidx.lifecycle.viewModelScope
 import com.squareup.phrase.Phrase
 import dagger.assisted.Assisted
@@ -9,8 +8,6 @@ import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -21,7 +18,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import network.loki.messenger.R
 import org.session.libsession.database.StorageProtocol
-import org.session.libsession.messaging.groups.GroupInviteException
 import org.session.libsession.messaging.groups.GroupManagerV2
 import org.session.libsession.utilities.Address
 import org.session.libsession.utilities.ConfigFactoryProtocol
@@ -31,7 +27,6 @@ import org.session.libsession.utilities.StringSubstitutionConstants.OTHER_NAME_K
 import org.thoughtcrime.securesms.database.RecipientRepository
 import org.thoughtcrime.securesms.ui.GetString
 import org.thoughtcrime.securesms.util.AvatarUtils
-import kotlin.collections.map
 
 @HiltViewModel(assistedFactory = PromoteMembersViewModel.Factory::class)
 class PromoteMembersViewModel @AssistedInject constructor(

@@ -1054,9 +1054,18 @@ class ConversationSettingsViewModel @AssistedInject constructor(
                     positiveQaTag = dialogData.positiveQaTag?.let { context.getString(it) },
                     negativeQaTag = dialogData.negativeQaTag?.let { context.getString(it) },
                     onPositive = {
-                        if (isUserLastAdmin)
-                            navigateTo(ConversationSettingsDestination.RoutePromoteMembers(address))
-                        else leaveGroup()
+                        if (isUserLastAdmin){
+                            // Calling this to have the ManageAdminScreen in the backstack so we can
+                            // get its VM and PromoteMembersScreen can navigate back to it after sending promotions
+                            navigateTo(
+                                ConversationSettingsDestination.RouteManageAdmins(
+                                    groupAddress = address,
+                                    navigateToPromoteMembers = true
+                                )
+                            )
+                        }else{
+                            leaveGroup()
+                        }
                     },
                     positiveStyleDanger = !isUserLastAdmin,
                     onNegative = {

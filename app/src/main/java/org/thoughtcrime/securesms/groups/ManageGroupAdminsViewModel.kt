@@ -1,7 +1,6 @@
 package org.thoughtcrime.securesms.groups
 
 import android.content.Context
-import android.widget.Toast
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.lifecycle.viewModelScope
@@ -10,8 +9,6 @@ import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -44,6 +41,7 @@ import org.thoughtcrime.securesms.util.AvatarUtils
 class ManageGroupAdminsViewModel @AssistedInject constructor(
     @Assisted private val groupAddress: Address.Group,
     @Assisted private val navigator: UINavigator<ConversationSettingsDestination>,
+    @Assisted private val openPromoteMembers: Boolean,
     @ApplicationContext private val context: Context,
     storage: StorageProtocol,
     private val configFactory: ConfigFactoryProtocol,
@@ -98,6 +96,11 @@ class ManageGroupAdminsViewModel @AssistedInject constructor(
                 _uiState.update { it.copy(footer = footer) }
             }
         }
+
+        if (openPromoteMembers) {
+            // Only runs once for this nav entry, so no loop on back
+            navigateToPromoteMembers()
+        }
     }
 
     fun onAdminItemClicked(member: GroupMemberState) {
@@ -115,7 +118,8 @@ class ManageGroupAdminsViewModel @AssistedInject constructor(
     private fun navigateToPromoteMembers() {
         viewModelScope.launch {
             navigator.navigate(
-                ConversationSettingsDestination.RoutePromoteMembers(groupAddress)
+                destination = ConversationSettingsDestination.RoutePromoteMembers(groupAddress),
+                debounce = false
             )
         }
     }
@@ -254,7 +258,7 @@ class ManageGroupAdminsViewModel @AssistedInject constructor(
         val isSearchFocused: Boolean = false,
 
         //Collapsible footer
-        val footer: CollapsibleFooterState = CollapsibleFooterState()
+        val footer: CollapsibleFooterState = CollapsibleFooterState(),
     )
 
     data class CollapsibleFooterState(
@@ -289,7 +293,8 @@ class ManageGroupAdminsViewModel @AssistedInject constructor(
     interface Factory {
         fun create(
             groupAddress: Address.Group,
-            navigator: UINavigator<ConversationSettingsDestination>
+            navigator: UINavigator<ConversationSettingsDestination>,
+            navigateToPromoteMembers: Boolean
         ): ManageGroupAdminsViewModel
     }
 }

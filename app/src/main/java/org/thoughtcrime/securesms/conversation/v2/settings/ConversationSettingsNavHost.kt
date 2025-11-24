@@ -14,6 +14,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
@@ -78,9 +79,13 @@ sealed interface ConversationSettingsDestination: Parcelable {
     @Serializable
     @Parcelize
     data class RouteManageAdmins private constructor(
-        private val address: String
-    ): ConversationSettingsDestination {
-        constructor(groupAddress: Address.Group): this(groupAddress.address)
+        private val address: String,
+        val navigateToPromoteMembers: Boolean = false
+    ) : ConversationSettingsDestination {
+        constructor(groupAddress: Address.Group, navigateToPromoteMembers: Boolean = false) : this(
+            groupAddress.address,
+            navigateToPromoteMembers
+        )
 
         val groupAddress: Address.Group get() = Address.Group(AccountId(address))
     }
@@ -243,7 +248,7 @@ fun ConversationSettingsNavHost(
 
                 val viewModel =
                     hiltViewModel<ManageGroupAdminsViewModel, ManageGroupAdminsViewModel.Factory> { factory ->
-                        factory.create(data.groupAddress, navigator)
+                        factory.create(data.groupAddress, navigator, data.navigateToPromoteMembers)
                     }
 
                 ManageGroupAdminsScreen(
@@ -253,7 +258,6 @@ fun ConversationSettingsNavHost(
                     },
                 )
             }
-
 
             // Invite Contacts to group
             horizontalSlideComposable<RouteInviteToGroup> { backStackEntry ->
@@ -387,9 +391,7 @@ fun ConversationSettingsNavHost(
                     }
 
                 val parentEntry = remember(backStackEntry) {
-                    navController.getBackStackEntry(
-                        RouteManageAdmins(data.groupAddress)
-                    )
+                    navController.previousBackStackEntry ?: error("")
                 }
                 val manageGroupAdminsViewModel: ManageGroupAdminsViewModel = hiltViewModel(parentEntry)
 
