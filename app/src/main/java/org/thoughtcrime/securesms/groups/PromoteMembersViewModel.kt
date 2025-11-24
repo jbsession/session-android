@@ -47,11 +47,6 @@ class PromoteMembersViewModel @AssistedInject constructor(
 ) {
     private val groupId = groupAddress.accountId
 
-    // Current group name (for header / text, if needed)
-    val groupName: StateFlow<String> = groupInfo
-        .map { it?.first?.name.orEmpty() }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), "")
-
     private val _mutableSelectedMembers = MutableStateFlow(emptySet<GroupMemberState>())
     val selectedMembers: StateFlow<Set<GroupMemberState>> = _mutableSelectedMembers
 

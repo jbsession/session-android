@@ -83,6 +83,11 @@ abstract class BaseGroupMembersViewModel(
                 }
           }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    // Current group name (for header / text, if needed)
+    val groupName: StateFlow<String> = groupInfo
+        .map { it?.first?.name.orEmpty() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), "")
+
     private val mutableSearchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> get() = mutableSearchQuery
 

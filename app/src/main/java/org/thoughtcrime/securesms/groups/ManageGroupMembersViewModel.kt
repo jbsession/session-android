@@ -55,11 +55,6 @@ class ManageGroupMembersViewModel @AssistedInject constructor(
 ) : BaseGroupMembersViewModel(groupAddress, context, storage, configFactory, avatarUtils, recipientRepository) {
     private val groupId = groupAddress.accountId
 
-    // Output: The name of the group. This is the current name of the group, not the name being edited.
-    val groupName: StateFlow<String> = groupInfo
-        .map { it?.first?.name.orEmpty() }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(), "")
-
     // Output: whether we should show the "add members" button
     val showAddMembers: StateFlow<Boolean> = groupInfo
         .map { it?.first?.isUserAdmin == true }
