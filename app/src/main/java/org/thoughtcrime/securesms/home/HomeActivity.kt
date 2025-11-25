@@ -241,6 +241,9 @@ class HomeActivity : ScreenLockActionBarActivity(),
                 if (searchHandled) return
 
                 if (!homeViewModel.onBackPressed()) {
+                    // Temporarily disable this callback so this back press can fall through to
+                    // the next OnBackPressedCallback or the Activity's default behavior
+                    // without re-entering this handler (and causing recursion).
                     isEnabled = false
                     onBackPressedDispatcher.onBackPressed()
                     isEnabled = true
