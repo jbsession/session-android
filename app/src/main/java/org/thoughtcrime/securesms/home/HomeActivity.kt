@@ -8,7 +8,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import android.view.ViewGroup.MarginLayoutParams
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.viewModels
@@ -19,11 +18,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.core.graphics.Insets
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
-import androidx.core.view.updateLayoutParams
 import androidx.core.view.updatePadding
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -49,17 +49,16 @@ import org.session.libsession.messaging.jobs.JobQueue
 import org.session.libsession.messaging.sending_receiving.notifications.MessageNotifier
 import org.session.libsession.snode.SnodeClock
 import org.session.libsession.utilities.Address
-import org.session.libsession.utilities.Address.Companion.toAddress
 import org.session.libsession.utilities.StringSubstitutionConstants.GROUP_NAME_KEY
 import org.session.libsession.utilities.StringSubstitutionConstants.NAME_KEY
 import org.session.libsession.utilities.TextSecurePreferences
 import org.session.libsession.utilities.recipients.RecipientData
 import org.session.libsession.utilities.recipients.displayName
-import org.session.libsession.utilities.recipients.shouldShowProBadge
 import org.session.libsession.utilities.updateContact
 import org.session.libsignal.utilities.Log
 import org.thoughtcrime.securesms.ApplicationContext
 import org.thoughtcrime.securesms.ScreenLockActionBarActivity
+import org.thoughtcrime.securesms.auth.LoginStateRepository
 import org.thoughtcrime.securesms.conversation.v2.ConversationActivityV2
 import org.thoughtcrime.securesms.conversation.v2.settings.notification.NotificationSettingsActivity
 import org.thoughtcrime.securesms.crypto.IdentityKeyUtil
@@ -76,7 +75,6 @@ import org.thoughtcrime.securesms.home.search.GlobalSearchInputLayout
 import org.thoughtcrime.securesms.home.search.GlobalSearchResult
 import org.thoughtcrime.securesms.home.search.GlobalSearchViewModel
 import org.thoughtcrime.securesms.home.search.SearchContactActionBottomSheet
-import org.thoughtcrime.securesms.home.startconversation.StartConversationDestination
 import org.thoughtcrime.securesms.messagerequests.MessageRequestsActivity
 import org.thoughtcrime.securesms.permissions.Permissions
 import org.thoughtcrime.securesms.preferences.SettingsActivity
@@ -88,8 +86,6 @@ import org.thoughtcrime.securesms.reviews.ui.InAppReview
 import org.thoughtcrime.securesms.reviews.ui.InAppReviewViewModel
 import org.thoughtcrime.securesms.showSessionDialog
 import org.thoughtcrime.securesms.tokenpage.TokenPageNotificationManager
-import org.thoughtcrime.securesms.ui.ObserveAsEvents
-import org.thoughtcrime.securesms.ui.UINavigator
 import org.thoughtcrime.securesms.ui.components.Avatar
 import org.thoughtcrime.securesms.ui.setThemedContent
 import org.thoughtcrime.securesms.ui.theme.LocalDimensions
@@ -138,13 +134,13 @@ class HomeActivity : ScreenLockActionBarActivity(),
     @Inject lateinit var proStatusManager: ProStatusManager
     @Inject lateinit var recipientRepository: RecipientRepository
     @Inject lateinit var avatarUtils: AvatarUtils
-    @Inject lateinit var startConversationNavigator: UINavigator<StartConversationDestination>
+    @Inject lateinit var loginStateRepository: LoginStateRepository
 
     private val globalSearchViewModel by viewModels<GlobalSearchViewModel>()
     private val homeViewModel by viewModels<HomeViewModel>()
     private val inAppReviewViewModel by viewModels<InAppReviewViewModel>()
 
-    private val publicKey: String by lazy { textSecurePreferences.getLocalNumber()!! }
+    private val publicKey: String by lazy { loginStateRepository.requireLocalNumber() }
 
     private val homeAdapter: HomeAdapter by lazy {
         HomeAdapter(context = this, configFactory = configFactory, listener = this, ::showMessageRequests, ::hideMessageRequests)
@@ -177,7 +173,7 @@ class HomeActivity : ScreenLockActionBarActivity(),
                     is GlobalSearchAdapter.Model.GroupConversation -> ConversationActivityV2
                         .createIntent(
                             this,
-                            address = Address.fromSerialized(model.groupId) as Address.Conversable
+                            address = model.address
                         )
 
                     else -> {
@@ -309,10 +305,9 @@ class HomeActivity : ScreenLockActionBarActivity(),
         binding.dialogs.apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setThemedContent {
-                val dialogsState by homeViewModel.dialogsState.collectAsState()
+                val dialogsState by homeViewModel.dialogsState.collectAsStateWithLifecycle()
                 HomeDialogs(
                     dialogsState = dialogsState,
-                    startConversationNavigator = startConversationNavigator,
                     sendCommand = homeViewModel::onCommand
                 )
             }
@@ -354,7 +349,7 @@ class HomeActivity : ScreenLockActionBarActivity(),
             launch(Dispatchers.Default) {
                 // update things based on TextSecurePrefs (profile info etc)
                 // Set up remaining components if needed
-                if (textSecurePreferences.getLocalNumber() != null) {
+                if (loginStateRepository.getLocalNumber() != null) {
                     JobQueue.shared.resumePendingJobs()
                 }
             }
@@ -435,16 +430,6 @@ class HomeActivity : ScreenLockActionBarActivity(),
             }
         }
 
-        binding.root.applySafeInsetsPaddings(
-            applyBottom = false,
-            alsoApply = { insets ->
-                binding.globalSearchRecycler.updatePadding(bottom = insets.bottom)
-                binding.newConversationButton.updateLayoutParams<MarginLayoutParams> {
-                    bottomMargin = insets.bottom + resources.getDimensionPixelSize(R.dimen.new_conversation_button_bottom_offset)
-                }
-            }
-        )
-
         // Set up in-app review
         binding.inAppReviewView.setThemedContent {
             InAppReview(
@@ -453,6 +438,10 @@ class HomeActivity : ScreenLockActionBarActivity(),
                 sendCommands = inAppReviewViewModel::sendUiCommand,
             )
         }
+
+        rewireConversationOptionsCallbacksIfPresent()
+
+        applyViewInsets()
     }
 
     override fun onCancelClicked() {
@@ -503,8 +492,8 @@ class HomeActivity : ScreenLockActionBarActivity(),
                     .map {
                         GlobalSearchAdapter.Model.Contact(
                             contact = it.value,
-                            isSelf = it.value.address.address == publicKey,
-                            showProBadge = it.value.proStatus.shouldShowProBadge()
+                            isSelf = it.value.isSelf,
+                            showProBadge = it.value.shouldShowProBadge
                         )
                     }
             }
@@ -514,10 +503,12 @@ class HomeActivity : ScreenLockActionBarActivity(),
         contacts.map { GlobalSearchAdapter.Model.Contact(
             contact = it,
             isSelf = it.isSelf,
-            showProBadge = it.proStatus.shouldShowProBadge()
+            showProBadge = it.shouldShowProBadge
         ) } +
-            threads.map {
-                GlobalSearchAdapter.Model.GroupConversation(it, showProBadge = recipientRepository.getRecipientSync(it.encodedId.toAddress()).proStatus.shouldShowProBadge())
+            threads.mapNotNull {
+                if(it.address is Address.GroupLike)
+                    GlobalSearchAdapter.Model.GroupConversation(it)
+                else null
             }
 
     private val GlobalSearchResult.messageResults: List<GlobalSearchAdapter.Model> get() {
@@ -530,7 +521,7 @@ class HomeActivity : ScreenLockActionBarActivity(),
                 messageResult = it,
                 unread = unreadThreadMap[it.threadId] ?: 0,
                 isSelf = it.conversationRecipient.isLocalNumber,
-                showProBadge = it.conversationRecipient.proStatus.shouldShowProBadge()
+                showProBadge = it.conversationRecipient.shouldShowProBadge
             )
         }
     }
@@ -566,7 +557,7 @@ class HomeActivity : ScreenLockActionBarActivity(),
     override fun onResume() {
         super.onResume()
         messageNotifier.setHomeScreenVisible(true)
-        if (textSecurePreferences.getLocalNumber() == null) { return; } // This can be the case after a secondary device is auto-cleared
+        if (loginStateRepository.getLocalNumber() == null) { return; } // This can be the case after a secondary device is auto-cleared
         IdentityKeyUtil.checkUpdate(this)
         if (textSecurePreferences.getHasViewedSeed()) {
             binding.seedReminderView.isVisible = false
@@ -593,75 +584,99 @@ class HomeActivity : ScreenLockActionBarActivity(),
     }
 
     override fun onLongConversationClick(thread: ThreadRecord) {
-        val bottomSheet = ConversationOptionsBottomSheet(this)
-        bottomSheet.publicKey = publicKey
-        bottomSheet.thread = thread
         val threadRecipient = thread.recipient
-        bottomSheet.group = groupDatabase.getGroup(threadRecipient.address.toString()).orNull()
-        bottomSheet.onViewDetailsTapped = {
-            bottomSheet.dismiss()
+        val bottomSheet = ConversationOptionsBottomSheet.newInstance(
+            publicKey = publicKey,
+            threadId = thread.threadId,
+            address = threadRecipient.address.toString()
+        )
+        attachConversationOptionsCallbacks(bottomSheet, thread)
+        bottomSheet.show(supportFragmentManager, ConversationOptionsBottomSheet.FRAGMENT_TAG)
+    }
+
+    /**
+     * If a ConversationOptionsBottomSheet was restored by FragmentManager after a
+     * configuration change, re-attach its callbacks and refresh the ThreadRecord.
+     */
+    private fun rewireConversationOptionsCallbacksIfPresent() {
+        val sheet = supportFragmentManager
+            .findFragmentByTag(ConversationOptionsBottomSheet.FRAGMENT_TAG)
+                as? ConversationOptionsBottomSheet ?: return
+
+        val threadId = sheet.requireArguments()
+            .getLong(ConversationOptionsBottomSheet.ARG_THREAD_ID)
+
+        val threadRecord = homeViewModel.data.value?.items?.asSequence()
+            ?.filterIsInstance<HomeViewModel.Item.Thread>()
+            ?.firstOrNull { it.thread.threadId == threadId }?.thread
+
+        threadRecord?.let {
+            attachConversationOptionsCallbacks(sheet, it)
+        }
+    }
+
+    private fun attachConversationOptionsCallbacks(
+        sheet: ConversationOptionsBottomSheet,
+        thread: ThreadRecord
+    ) {
+        val threadRecipient = thread.recipient
+        sheet.onViewDetailsTapped = {
+            sheet.dismiss()
             homeViewModel.showUserProfileModal(thread)
         }
-        bottomSheet.onCopyConversationId = onCopyConversationId@{
-            bottomSheet.dismiss()
+        sheet.onCopyConversationId = {
+            sheet.dismiss()
             if (threadRecipient.address is Address.WithAccountId && !threadRecipient.isSelf) {
-                val clip = ClipData.newPlainText("Account ID", threadRecipient.address.accountId.hexString)
-                val manager = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-                manager.setPrimaryClip(clip)
-                Toast.makeText(this, R.string.copied, Toast.LENGTH_SHORT).show()
-            }
-            else if (threadRecipient.data is RecipientData.Community) {
+                val clip = ClipData.newPlainText(
+                    "Account ID",
+                    threadRecipient.address.accountId.hexString
+                )
+                (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(clip)
+                Toast.makeText(this@HomeActivity, R.string.copied, Toast.LENGTH_SHORT).show()
+            } else if (threadRecipient.data is RecipientData.Community) {
                 val clip = ClipData.newPlainText("Community URL", threadRecipient.data.joinURL)
-                val manager = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-                manager.setPrimaryClip(clip)
-                Toast.makeText(this, R.string.copied, Toast.LENGTH_SHORT).show()
+                (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(clip)
+                Toast.makeText(this@HomeActivity, R.string.copied, Toast.LENGTH_SHORT).show()
             }
         }
-        bottomSheet.onBlockTapped = {
-            bottomSheet.dismiss()
-            if (!threadRecipient.blocked) {
-                blockConversation(thread)
-            }
+        sheet.onBlockTapped = {
+            sheet.dismiss()
+            if (!threadRecipient.blocked) blockConversation(thread)
         }
-        bottomSheet.onUnblockTapped = {
-            bottomSheet.dismiss()
-            if (threadRecipient.blocked) {
-                unblockConversation(thread)
-            }
+        sheet.onUnblockTapped = {
+            sheet.dismiss()
+            if (threadRecipient.blocked) unblockConversation(thread)
         }
-        bottomSheet.onDeleteTapped = {
-            bottomSheet.dismiss()
+        sheet.onDeleteTapped = {
+            sheet.dismiss()
             deleteConversation(thread)
         }
-        bottomSheet.onNotificationTapped = {
-            bottomSheet.dismiss()
-            // go to the notification settings
-            val intent = Intent(this, NotificationSettingsActivity::class.java).apply {
+        sheet.onNotificationTapped = {
+            sheet.dismiss()
+            startActivity(Intent(this, NotificationSettingsActivity::class.java).apply {
                 putExtra(NotificationSettingsActivity.ARG_ADDRESS, threadRecipient.address)
-            }
-            startActivity(intent)
+            })
         }
-        bottomSheet.onPinTapped = {
-            bottomSheet.dismiss()
+        sheet.onPinTapped = {
+            sheet.dismiss()
             setConversationPinned(threadRecipient.address, true)
         }
-        bottomSheet.onUnpinTapped = {
-            bottomSheet.dismiss()
+        sheet.onUnpinTapped = {
+            sheet.dismiss()
             setConversationPinned(threadRecipient.address, false)
         }
-        bottomSheet.onMarkAllAsReadTapped = {
-            bottomSheet.dismiss()
+        sheet.onMarkAllAsReadTapped = {
+            sheet.dismiss()
             markAllAsRead(thread)
         }
-        bottomSheet.onMarkAsUnreadTapped = {
-            bottomSheet.dismiss()
+        sheet.onMarkAsUnreadTapped = {
+            sheet.dismiss()
             markAsUnread(thread)
         }
-        bottomSheet.onDeleteContactTapped = {
-            bottomSheet.dismiss()
+        sheet.onDeleteContactTapped = {
+            sheet.dismiss()
             confirmDeleteContact(thread)
         }
-        bottomSheet.show(supportFragmentManager, bottomSheet.tag)
     }
 
     private fun blockConversation(thread: ThreadRecord) {
@@ -902,6 +917,21 @@ class HomeActivity : ScreenLockActionBarActivity(),
 
     private fun showStartConversation() {
         homeViewModel.onCommand(HomeViewModel.Commands.ShowStartConversationSheet)
+    }
+
+    private fun applyViewInsets() {
+        binding.root.applySafeInsetsPaddings(
+            applyBottom = false,
+            consumeInsets = false,
+            alsoApply = { insets ->
+                binding.globalSearchRecycler.updatePadding(bottom = insets.bottom)
+            }
+        )
+
+        binding.newConversationButton.applySafeInsetsMargins(
+            typeMask = WindowInsetsCompat.Type.navigationBars(),
+            additionalInsets = Insets.of(0,0,0, resources.getDimensionPixelSize(R.dimen.new_conversation_button_bottom_offset))
+        )
     }
 }
 

@@ -72,7 +72,7 @@ import network.loki.messenger.databinding.MediaViewPageBinding
 import org.session.libsession.messaging.groups.LegacyGroupDeprecationManager
 import org.session.libsession.messaging.messages.control.DataExtractionNotification
 import org.session.libsession.messaging.messages.control.DataExtractionNotification.Kind.MediaSaved
-import org.session.libsession.messaging.sending_receiving.MessageSender.send
+import org.session.libsession.messaging.sending_receiving.MessageSender
 import org.session.libsession.messaging.sending_receiving.attachments.DatabaseAttachment
 import org.session.libsession.snode.SnodeAPI.nowWithOffset
 import org.session.libsession.utilities.Address
@@ -138,6 +138,9 @@ class MediaPreviewActivity : ScreenLockActionBarActivity(),
     @Inject
     lateinit var recipientRepository: RecipientRepository
 
+    @Inject
+    lateinit var messageSender: MessageSender
+
     override val applyDefaultWindowInsets: Boolean
         get() = false
 
@@ -145,7 +148,6 @@ class MediaPreviewActivity : ScreenLockActionBarActivity(),
     private var albumRailAdapter: MediaRailAdapter? = null
 
     private var windowInsetBottom = 0
-    private var railHeight = 0
 
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun onCreate(bundle: Bundle?, ready: Boolean) {
@@ -172,13 +174,13 @@ class MediaPreviewActivity : ScreenLockActionBarActivity(),
         ViewCompat.setOnApplyWindowInsetsListener(findViewById<View>(android.R.id.content)) { view, windowInsets ->
             val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime())
             windowInsetBottom = insets.bottom
-
+            
             binding.toolbar.updatePadding(
                 left = insets.left,
                 top = insets.top,
                 right = insets.right
             )
-            binding.mediaPreviewAlbumRailContainer.updatePadding(bottom = max(insets.bottom, binding.mediaPreviewAlbumRailContainer.paddingBottom))
+            binding.mediaPreviewAlbumRailContainer.updatePadding(bottom = insets.bottom)
 
             updateControlsPosition()
 
@@ -219,12 +221,9 @@ class MediaPreviewActivity : ScreenLockActionBarActivity(),
      * Updates the media controls' position based on the rail's position
      */
     private fun updateControlsPosition() {
-        // the ypos of the controls is either the window bottom inset, or the rail height if there is a rail
-        // since the rail height takes the window inset into account with its padding
-        val totalBottomPadding = max(
-            windowInsetBottom,
-            railHeight + resources.getDimensionPixelSize(R.dimen.medium_spacing)
-        )
+        val totalBottomPadding = windowInsetBottom +
+                binding.mediaPreviewAlbumRail.height+
+                resources.getDimensionPixelSize(R.dimen.medium_spacing)
 
         adapter?.setControlsYPosition(totalBottomPadding)
     }
@@ -265,9 +264,6 @@ class MediaPreviewActivity : ScreenLockActionBarActivity(),
     }
 
     private fun showAlbumRail() {
-        // never show the rail in landscape
-        if(isLandscape()) return
-
         val rail = binding.mediaPreviewAlbumRailContainer
         rail.animate().cancel()
         rail.visibility = View.VISIBLE
@@ -396,13 +392,11 @@ class MediaPreviewActivity : ScreenLockActionBarActivity(),
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        // always hide the rail in landscape
-        if (isLandscape()) {
-            hideAlbumRail()
+
+        if (!isFullscreen) {
+            showAlbumRail()
         } else {
-            if (!isFullscreen) {
-                showAlbumRail()
-            }
+            hideAlbumRail()
         }
 
         // Re-apply fullscreen if we were already in it
@@ -437,7 +431,7 @@ class MediaPreviewActivity : ScreenLockActionBarActivity(),
                                 binding.mediaPreviewAlbumRailContainer.viewTreeObserver.removeOnGlobalLayoutListener(
                                     this
                                 )
-                                railHeight = binding.mediaPreviewAlbumRailContainer.height
+
                                 updateControlsPosition()
                             }
                         }
@@ -562,7 +556,7 @@ class MediaPreviewActivity : ScreenLockActionBarActivity(),
                 nowWithOffset
             )
         )
-        send(message, conversationAddress!!)
+        messageSender.send(message, conversationAddress!!)
     }
 
     @SuppressLint("StaticFieldLeak")

@@ -250,7 +250,6 @@
             android:windowSoftInputMode="stateHidden" />
         <activity
             android:name="org.thoughtcrime.securesms.mediasend.MediaSendActivity"
-            android:configChanges="touchscreen|keyboard|keyboardHidden|orientation|screenLayout|screenSize"
             android:theme="@style/Theme.Session.DayNight.NoActionBar"
             android:windowSoftInputMode="stateHidden" />
         <activity
@@ -403,10 +402,7 @@
             </intent-filter>
         </receiver>
         <receiver android:name="org.thoughtcrime.securesms.notifications.DeleteNotificationReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="network.loki.securesms.DELETE_NOTIFICATION" />
-            </intent-filter>
+            android:exported="false">
         </receiver>
         <receiver
             android:name="org.thoughtcrime.securesms.service.PanicResponderListener"

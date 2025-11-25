@@ -2,12 +2,14 @@ package org.thoughtcrime.securesms.home.startconversation.home
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -28,10 +30,12 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.rememberNestedScrollInteropConnection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.min
 import androidx.compose.ui.unit.times
 import network.loki.messenger.R
 import org.thoughtcrime.securesms.home.startconversation.StartConversationDestination
@@ -99,10 +103,8 @@ private fun PortraitContent(
         QrPanel(
             accountId = accountId,
             modifier = Modifier
-                .padding(horizontal = LocalDimensions.current.spacing)
-                .padding(top = LocalDimensions.current.spacing)
-                .padding(bottom = LocalDimensions.current.spacing)
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .padding(LocalDimensions.current.spacing),
         )
     }
 }
@@ -114,9 +116,7 @@ private fun LandscapeContent(
 ) {
     Row(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = LocalDimensions.current.spacing),
-        horizontalArrangement = Arrangement.spacedBy(LocalDimensions.current.spacing)
+            .fillMaxWidth(),
     ) {
         // Left: independently scrollable actions list
         Column(
@@ -128,12 +128,20 @@ private fun LandscapeContent(
         }
 
         // Right: QR panel, vertically centered, with square sizing
-        QrPanel(
-            accountId = accountId,
+        Box(
             modifier = Modifier
-                .widthIn(max = 420.dp)
-                .align(Alignment.CenterVertically)
-        )
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+        ) {
+            QrPanel(
+                accountId = accountId,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = LocalDimensions.current.spacing)
+                    .padding(bottom = LocalDimensions.current.spacing)
+            )
+        }
+
     }
 }
 
@@ -142,33 +150,33 @@ private fun QrPanel(
     accountId: String,
     modifier: Modifier = Modifier
 ) {
-    BoxWithConstraints(
-        modifier = modifier
+    Column(
+        modifier = modifier.widthIn(max = 420.dp),
     ) {
-        val qrModifier = if (getAdaptiveInfo().isLandscape) {
-            val shortest: Dp = if (maxWidth < maxHeight) maxWidth else maxHeight
-            val qrSide = (shortest * 0.70f).coerceIn(160.dp, 520.dp)
-            Modifier.size(qrSide)
-        } else {
-            Modifier
-        }
-
-        Column(
-            modifier = Modifier.widthIn(max = 420.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(stringResource(R.string.accountIdYours), style = LocalType.current.xl)
-            Spacer(modifier = Modifier.height(LocalDimensions.current.xxsSpacing))
-            Text(
-                text = stringResource(R.string.qrYoursDescription),
-                color = LocalColors.current.textSecondary,
-                style = LocalType.current.small
-            )
-            Spacer(modifier = Modifier.height(LocalDimensions.current.smallSpacing))
+        Text(stringResource(R.string.accountIdYours), style = LocalType.current.xl)
+        Spacer(modifier = Modifier.height(LocalDimensions.current.xxsSpacing))
+        Text(
+            text = stringResource(R.string.qrYoursDescription),
+            color = LocalColors.current.textSecondary,
+            style = LocalType.current.small
+        )
+        Spacer(modifier = Modifier.height(LocalDimensions.current.smallSpacing))
+        BoxWithConstraints(modifier = Modifier) {
+            val qrModifier = if (getAdaptiveInfo().isLandscape) {
+                val shortest: Dp = min(maxWidth, maxHeight)
+                val qrSide = (shortest * 0.70f).coerceIn(
+                    LocalDimensions.current.minimumImgClamp,
+                    LocalDimensions.current.maximumImgClamp
+                )
+                Modifier.size(qrSide)
+            } else {
+                Modifier
+            }
             QrImage(
                 string = accountId,
                 modifier = qrModifier
-                    .qaTag(R.string.AccessibilityId_qrCode),
+                    .qaTag(R.string.AccessibilityId_qrCode)
+                    .aspectRatio(1f),
                 icon = R.drawable.session
             )
         }

@@ -13,23 +13,26 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import dagger.hilt.android.AndroidEntryPoint
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.min
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import network.loki.messenger.R
 import org.session.libsession.utilities.Address
-import org.session.libsession.utilities.TextSecurePreferences
 import org.session.libsignal.utilities.PublicKeyValidation
 import org.thoughtcrime.securesms.ScreenLockActionBarActivity
+import org.thoughtcrime.securesms.auth.LoginStateRepository
 import org.thoughtcrime.securesms.conversation.v2.ConversationActivityV2
 import org.thoughtcrime.securesms.permissions.Permissions
 import org.thoughtcrime.securesms.ui.adaptive.getAdaptiveInfo
@@ -42,10 +45,15 @@ import org.thoughtcrime.securesms.ui.theme.LocalColors
 import org.thoughtcrime.securesms.ui.theme.LocalDimensions
 import org.thoughtcrime.securesms.ui.theme.LocalType
 import org.thoughtcrime.securesms.util.applySafeInsetsPaddings
+import javax.inject.Inject
 
 private val TITLES = listOf(R.string.view, R.string.scan)
 
+@AndroidEntryPoint
 class QRCodeActivity : ScreenLockActionBarActivity() {
+
+    @Inject
+    lateinit var loginStateRepository: LoginStateRepository
 
     override val applyDefaultWindowInsets: Boolean
         get() = false
@@ -69,7 +77,7 @@ class QRCodeActivity : ScreenLockActionBarActivity() {
 
         setComposeContent {
             Tabs(
-                TextSecurePreferences.getLocalNumber(this)!!,
+                loginStateRepository.requireLocalNumber(),
                 errors.asSharedFlow(),
                 onScan = ::onScan
             )
@@ -171,14 +179,20 @@ private fun LandscapeContent(string: String) {
             .padding(horizontal = LocalDimensions.current.mediumSpacing)
     ) {
         // Scale QR to the shorter side to avoid overflow in landscape. Clamp for sanity
-        val shortest: Dp = if (maxWidth < maxHeight) maxWidth else maxHeight
-        val qrSide = (shortest * 0.72f).coerceIn(160.dp, 520.dp)
+        val shortest: Dp = min(maxWidth, maxHeight)
+        val qrSide = (shortest * 0.70f).coerceIn(
+            LocalDimensions.current.minimumImgClamp,
+            LocalDimensions.current.maximumImgClamp
+        )
 
         Column(
             modifier = Modifier
-                .align(Alignment.Center), // vertical + horizontal centering
+                .align(Alignment.Center)
+                .verticalScroll(rememberScrollState())
+                .padding(vertical = LocalDimensions.current.spacing), // vertical + horizontal centering
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(LocalDimensions.current.smallSpacing)
+
         ) {
             QrImage(
                 string = string,
