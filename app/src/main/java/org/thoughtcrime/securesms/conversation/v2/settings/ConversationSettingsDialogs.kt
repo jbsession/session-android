@@ -36,7 +36,7 @@ import org.thoughtcrime.securesms.conversation.v2.settings.ConversationSettingsV
 import org.thoughtcrime.securesms.conversation.v2.settings.ConversationSettingsViewModel.Commands.UpdateGroupDescription
 import org.thoughtcrime.securesms.conversation.v2.settings.ConversationSettingsViewModel.Commands.UpdateGroupName
 import org.thoughtcrime.securesms.conversation.v2.settings.ConversationSettingsViewModel.Commands.UpdateNickname
-import org.thoughtcrime.securesms.pro.SubscriptionType
+import org.thoughtcrime.securesms.pro.ProStatus
 import org.thoughtcrime.securesms.ui.AlertDialog
 import org.thoughtcrime.securesms.ui.CTAImage
 import org.thoughtcrime.securesms.ui.DialogButtonData
@@ -265,6 +265,7 @@ fun ConversationSettingsDialogs(
                         iconRes = R.drawable.ic_pro_badge,
                         iconSize = 40.sp to 18.sp,
                         style = LocalType.current.large,
+                        textQaTag = stringResource(R.string.qa_cta_body)
                     )
                 },
                 content = { CTAImage(heroImage = R.drawable.cta_hero_group) },
@@ -443,7 +444,7 @@ fun PreviewCTAGroupDialog() {
     PreviewTheme {
         ConversationSettingsDialogs(
             dialogsState = ConversationSettingsViewModel.DialogsState(
-                proBadgeCTA = ConversationSettingsViewModel.ProBadgeCTA.Group(SubscriptionType.NeverSubscribed)
+                proBadgeCTA = ConversationSettingsViewModel.ProBadgeCTA.Group(ProStatus.NeverSubscribed)
             ),
             sendCommand = {}
         )

@@ -11,6 +11,7 @@ import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity.CLIPBOARD_SERVICE
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.squareup.phrase.Phrase
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
@@ -23,13 +24,12 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import network.loki.messenger.R
-import network.loki.messenger.libsession_util.ConfigBase.Companion.PRIORITY_HIDDEN
-import network.loki.messenger.libsession_util.ConfigBase.Companion.PRIORITY_VISIBLE
+import network.loki.messenger.libsession_util.PRIORITY_HIDDEN
+import network.loki.messenger.libsession_util.PRIORITY_VISIBLE
 import network.loki.messenger.libsession_util.allWithStatus
 import network.loki.messenger.libsession_util.util.ExpiryMode
 import org.session.libsession.database.StorageProtocol
@@ -46,8 +46,6 @@ import org.session.libsession.utilities.isGroupOrCommunity
 import org.session.libsession.utilities.recipients.Recipient
 import org.session.libsession.utilities.recipients.RecipientData
 import org.session.libsession.utilities.recipients.displayName
-import org.session.libsession.utilities.recipients.isPro
-import org.session.libsession.utilities.recipients.shouldShowProBadge
 import org.session.libsession.utilities.updateContact
 import org.session.libsession.utilities.upsertContact
 import org.session.libsignal.utilities.AccountId
@@ -60,8 +58,8 @@ import org.thoughtcrime.securesms.dependencies.ConfigFactory.Companion.MAX_GROUP
 import org.thoughtcrime.securesms.dependencies.ConfigFactory.Companion.MAX_NAME_BYTES
 import org.thoughtcrime.securesms.groups.OpenGroupManager
 import org.thoughtcrime.securesms.home.HomeActivity
+import org.thoughtcrime.securesms.pro.ProStatus
 import org.thoughtcrime.securesms.pro.ProStatusManager
-import org.thoughtcrime.securesms.pro.SubscriptionType
 import org.thoughtcrime.securesms.repository.ConversationRepository
 import org.thoughtcrime.securesms.ui.SimpleDialogData
 import org.thoughtcrime.securesms.ui.UINavigator
@@ -420,7 +418,7 @@ class ConversationSettingsViewModel @AssistedInject constructor(
             }
 
             conversation.data is RecipientData.Group -> {
-                conversation.data.partial.description to // description
+                conversation.data.description to // description
                         context.getString(R.string.qa_conversation_settings_description_groups) // description qa tag
             }
 
@@ -556,7 +554,7 @@ class ConversationSettingsViewModel @AssistedInject constructor(
 
             conversation.data is RecipientData.Group -> {
                 // if the user is kicked or the group destroyed, only show "Delete Group"
-                if (!conversation.data.partial.shouldPoll){
+                if (!conversation.data.shouldPoll){
                     listOf(
                             OptionsCategory(
                                 items = listOf(
@@ -683,10 +681,10 @@ class ConversationSettingsViewModel @AssistedInject constructor(
             else -> emptyList()
         }
 
-        val showProBadge = conversation.proStatus.shouldShowProBadge() && !conversation.isLocalNumber
+        val showProBadge = conversation.shouldShowProBadge && !conversation.isLocalNumber
 
         // if it's a one on one convo and the user isn't pro themselves
-        val proBadgeClickable = if(conversation.is1on1 && myself.proStatus.isPro()) false
+        val proBadgeClickable = if(conversation.is1on1 && myself.isPro) false
         else showProBadge // otherwise whenever the badge is shown
 
         val avatarData = avatarUtils.getUIDataFromRecipient(conversation)
@@ -742,14 +740,17 @@ class ConversationSettingsViewModel @AssistedInject constructor(
     private fun pinConversation(){
         // check the pin limit before continuing
         val totalPins = storage.getTotalPinned()
-        val maxPins = proStatusManager.getPinnedConversationLimit(recipientRepository.getSelf().proStatus)
-        if(totalPins >= maxPins){
+        val maxPins =
+            proStatusManager.getPinnedConversationLimit(recipientRepository.getSelf().isPro)
+        if (totalPins >= maxPins) {
             // the user has reached the pin limit, show the CTA
             _dialogState.update {
-                it.copy(pinCTA = PinProCTA(
-                    overTheLimit = totalPins > maxPins,
-                    proSubscription = proStatusManager.subscriptionState.value.type
-                ))
+                it.copy(
+                    pinCTA = PinProCTA(
+                        overTheLimit = totalPins > maxPins,
+                        proSubscription = proStatusManager.proDataState.value.type
+                    )
+                )
             }
         } else {
             viewModelScope.launch {
@@ -775,7 +776,7 @@ class ConversationSettingsViewModel @AssistedInject constructor(
                     positiveQaTag = context.getString(R.string.qa_conversation_settings_dialog_block_confirm),
                     negativeQaTag = context.getString(R.string.qa_conversation_settings_dialog_block_cancel),
                     onPositive = ::blockUser,
-                    onNegative = {},
+                    onNegative = {}
                 )
             )
         }
@@ -1308,8 +1309,8 @@ class ConversationSettingsViewModel @AssistedInject constructor(
             is Commands.ShowProBadgeCTA -> {
                 _dialogState.update {
                     it.copy(
-                        proBadgeCTA = if(recipient?.isGroupV2Recipient == true) ProBadgeCTA.Group(proStatusManager.subscriptionState.value.type)
-                        else ProBadgeCTA.Generic(proStatusManager.subscriptionState.value.type)
+                        proBadgeCTA = if(recipient?.isGroupV2Recipient == true) ProBadgeCTA.Group(proStatusManager.proDataState.value.type)
+                        else ProBadgeCTA.Generic(proStatusManager.proDataState.value.type)
                     )
                 }
             }
@@ -1514,12 +1515,12 @@ class ConversationSettingsViewModel @AssistedInject constructor(
 
     data class PinProCTA(
         val overTheLimit: Boolean,
-        val proSubscription: SubscriptionType
+        val proSubscription: ProStatus
     )
 
-    sealed class ProBadgeCTA(open val proSubscription: SubscriptionType) {
-        data class Generic(override val proSubscription: SubscriptionType): ProBadgeCTA(proSubscription)
-        data class Group(override val proSubscription: SubscriptionType): ProBadgeCTA(proSubscription)
+    sealed class ProBadgeCTA(open val proSubscription: ProStatus) {
+        data class Generic(override val proSubscription: ProStatus): ProBadgeCTA(proSubscription)
+        data class Group(override val proSubscription: ProStatus): ProBadgeCTA(proSubscription)
     }
 
     data class NicknameDialogData(
