@@ -1,13 +1,10 @@
 package org.thoughtcrime.securesms.mediasend
 
 import android.Manifest
-import android.app.Activity
 import android.content.Context
 import android.content.Intent
-import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
-import android.provider.AlarmClock.EXTRA_MESSAGE
 import android.view.View
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.AccelerateInterpolator
@@ -28,7 +25,6 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import network.loki.messenger.R
 import network.loki.messenger.databinding.MediasendActivityBinding
-import org.session.libsession.snode.SnodeAPI.KEY_BODY
 import org.session.libsession.utilities.Address
 import org.session.libsession.utilities.Address.Companion.fromSerialized
 import org.session.libsession.utilities.MediaTypes
@@ -69,8 +65,6 @@ class MediaSendActivity : ScreenLockActionBarActivity(), MediaPickerFolderFragme
 
     private var lastEntryFromCameraCapture: Boolean = false
 
-    private lateinit var backCallback: OnBackPressedCallback
-
     override val applyDefaultWindowInsets: Boolean
         get() = false // we want to handle window insets manually here for fullscreen fragments like the camera screen
 
@@ -85,12 +79,11 @@ class MediaSendActivity : ScreenLockActionBarActivity(), MediaPickerFolderFragme
             ViewGroupCompat.installCompatInsetsDispatch(it.root)
         }
 
-        backCallback = object : OnBackPressedCallback(true) {
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true){
             override fun handleOnBackPressed() {
-                handleBackPressedCompat()
+                handleBackPressed()
             }
-        }
-        onBackPressedDispatcher.addCallback(this, backCallback)
+        })
 
         setResult(RESULT_CANCELED)
 
@@ -146,7 +139,7 @@ class MediaSendActivity : ScreenLockActionBarActivity(), MediaPickerFolderFragme
         }
     }
 
-    private fun handleBackPressedCompat() {
+    private fun handleBackPressed() {
         val fm = supportFragmentManager
         val isCameraFlow = intent.getBooleanExtra(KEY_IS_CAMERA, false)
 

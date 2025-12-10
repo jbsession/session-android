@@ -49,10 +49,7 @@ class MessageNotificationsActivity : BaseActionBarActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (viewModel.onBackPressed()) return
-
-                isEnabled = false
-                onBackPressedDispatcher.onBackPressed()
-                isEnabled = true
+                finish()
             }
         })
 
