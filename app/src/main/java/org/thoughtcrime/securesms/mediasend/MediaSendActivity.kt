@@ -69,6 +69,8 @@ class MediaSendActivity : ScreenLockActionBarActivity(), MediaPickerFolderFragme
 
     private var lastEntryFromCameraCapture: Boolean = false
 
+    private lateinit var backCallback: OnBackPressedCallback
+
     override val applyDefaultWindowInsets: Boolean
         get() = false // we want to handle window insets manually here for fullscreen fragments like the camera screen
 
@@ -82,6 +84,13 @@ class MediaSendActivity : ScreenLockActionBarActivity(), MediaPickerFolderFragme
             setContentView(it.root)
             ViewGroupCompat.installCompatInsetsDispatch(it.root)
         }
+
+        backCallback = object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                handleBackPressedCompat()
+            }
+        }
+        onBackPressedDispatcher.addCallback(this, backCallback)
 
         setResult(RESULT_CANCELED)
 
@@ -137,24 +146,23 @@ class MediaSendActivity : ScreenLockActionBarActivity(), MediaPickerFolderFragme
         }
     }
 
-    override fun onBackPressed() {
+    private fun handleBackPressedCompat() {
         val fm = supportFragmentManager
         val isCameraFlow = intent.getBooleanExtra(KEY_IS_CAMERA, false)
 
         if (lastEntryFromCameraCapture) {
             if (isCameraFlow && fm.backStackEntryCount == 1) {
-                super.onBackPressed()
-                viewModel.onImageCaptureUndo(this)
+                viewModel.onImageCaptureUndo(this@MediaSendActivity)
+                fm.popBackStack()
             }
-
             lastEntryFromCameraCapture = false
             navigateToCamera()
             return
-        }else{
-            super.onBackPressed()
         }
 
-        if (isCameraFlow && fm.backStackEntryCount == 0) {
+        if (fm.backStackEntryCount > 0) {
+            fm.popBackStack()
+        } else {
             setResult(RESULT_CANCELED, Intent())
             finish()
         }
