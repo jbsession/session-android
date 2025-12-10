@@ -4,11 +4,13 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.asFlow
 import androidx.lifecycle.viewModelScope
+import com.squareup.phrase.Phrase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,10 +29,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import network.loki.messenger.R
-import network.loki.messenger.libsession_util.ConfigBase.Companion.PRIORITY_HIDDEN
+import network.loki.messenger.libsession_util.PRIORITY_HIDDEN
 import org.session.libsession.database.StorageProtocol
 import org.session.libsession.messaging.groups.GroupManagerV2
 import org.session.libsession.utilities.Address
+import org.session.libsession.utilities.StringSubstitutionConstants.APP_NAME_KEY
 import org.session.libsession.utilities.TextSecurePreferences
 import org.session.libsession.utilities.recipients.displayName
 import org.session.libsignal.utilities.AccountId
@@ -39,12 +42,18 @@ import org.thoughtcrime.securesms.auth.LoginStateRepository
 import org.thoughtcrime.securesms.database.RecipientRepository
 import org.thoughtcrime.securesms.database.ThreadDatabase
 import org.thoughtcrime.securesms.database.model.ThreadRecord
+import org.thoughtcrime.securesms.debugmenu.DebugLogGroup
 import org.thoughtcrime.securesms.dependencies.ConfigFactory
 import org.thoughtcrime.securesms.preferences.prosettings.ProSettingsDestination
+import org.thoughtcrime.securesms.preferences.prosettings.ProSettingsViewModel
 import org.thoughtcrime.securesms.pro.ProStatus
 import org.thoughtcrime.securesms.pro.ProStatusManager
 import org.thoughtcrime.securesms.repository.ConversationRepository
 import org.thoughtcrime.securesms.sskenvironment.TypingStatusRepository
+import org.thoughtcrime.securesms.ui.SimpleDialogData
+import org.thoughtcrime.securesms.ui.findActivity
+import org.thoughtcrime.securesms.ui.isWhitelistedFromDoze
+import org.thoughtcrime.securesms.ui.requestDozeWhitelist
 import org.thoughtcrime.securesms.util.DateUtils
 import org.thoughtcrime.securesms.util.DonationManager
 import org.thoughtcrime.securesms.util.DonationManager.Companion.URL_DONATE
@@ -162,6 +171,41 @@ class HomeViewModel @Inject constructor(
     private var userProfileModalUtils: UserProfileUtils? = null
 
     init {
+        // check for white list status in case of slow mode
+        if(!prefs.hasCheckedDozeWhitelist() // the user has not yet seen the dialog
+            && !prefs.pushEnabled.value // the user is in slow mode
+            && !context.isWhitelistedFromDoze() // the user isn't yet whitelisted
+        ){
+            prefs.setHasCheckedDozeWhitelist(true)
+            viewModelScope.launch {
+                delay(1500)
+                _dialogsState.update {
+                    it.copy(
+                        showSimpleDialog = SimpleDialogData(
+                            title = Phrase.from(context, R.string.runSessionBackground)
+                                .put(APP_NAME_KEY, context.getString(R.string.app_name))
+                                .format().toString(),
+                            message = Phrase.from(context, R.string.runSessionBackgroundDescription)
+                                .put(APP_NAME_KEY, context.getString(R.string.app_name))
+                                .format().toString(),
+                            positiveText = context.getString(R.string.allow),
+                            negativeText = context.getString(R.string.cancel),
+                            positiveQaTag = context.getString(R.string.qa_conversation_settings_dialog_whitelist_confirm),
+                            negativeQaTag = context.getString(R.string.qa_conversation_settings_dialog_whitelist_cancel),
+                            positiveStyleDanger = false,
+                            onPositive = {
+                                // show system whitelist dialog
+                                viewModelScope.launch {
+                                    _uiEvents.emit(UiEvent.ShowWhiteListSystemDialog)
+                                }
+                            },
+                            onNegative = {}
+                        )
+                    )
+                }
+            }
+        }
+
         // observe subscription status
         viewModelScope.launch {
             proStatusManager.proDataState.collect { subscription ->
@@ -170,12 +214,16 @@ class HomeViewModel @Inject constructor(
                 // - subscription expired less than 30 days ago
                 val now = Instant.now()
 
+                var showExpiring: Boolean = false
+                var showExpired: Boolean = false
+
                 if(subscription.type is ProStatus.Active.Expiring
                     && !prefs.hasSeenProExpiring()
                 ){
                     val validUntil = subscription.type.validUntil
-
-                    if (validUntil.isBefore(now.plus(7, ChronoUnit.DAYS))) {
+                    showExpiring = validUntil.isBefore(now.plus(7, ChronoUnit.DAYS))
+                    Log.d(DebugLogGroup.PRO_DATA.label, "Home: Pro active but not auto renewing (expiring). Valid until: $validUntil - Should show Expiring CTA? $showExpiring")
+                    if (showExpiring) {
                         _dialogsState.update { state ->
                             state.copy(
                                 proExpiringCTA = ProExpiringCTA(
@@ -188,21 +236,23 @@ class HomeViewModel @Inject constructor(
                 else if(subscription.type is ProStatus.Expired
                     && !prefs.hasSeenProExpired()) {
                     val validUntil = subscription.type.expiredAt
+                    showExpired = now.isBefore(validUntil.plus(30, ChronoUnit.DAYS))
+
+                    Log.d(DebugLogGroup.PRO_DATA.label, "Home: Pro expired. Expired at: $validUntil - Should show Expired CTA? $showExpired")
 
                     // Check if now is within 30 days after expiry
-                    if (now.isBefore(validUntil.plus(30, ChronoUnit.DAYS))) {
-
+                    if (showExpired) {
                         _dialogsState.update { state ->
                             state.copy(proExpiredCTA = true)
                         }
                     }
                 }
-            }
-        }
 
-        // check if we should display the donation CTA
-        if(donationManager.shouldShowDonationCTA()){
-            showDonationCTA()
+                // check if we should display the donation CTA - unless we have a pro CTA already
+                if(!showExpiring && !showExpired && donationManager.shouldShowDonationCTA()){
+                    showDonationCTA()
+                }
+            }
         }
     }
 
@@ -265,7 +315,8 @@ class HomeViewModel @Inject constructor(
     fun setPinned(address: Address, pinned: Boolean) {
         // check the pin limit before continuing
         val totalPins = storage.getTotalPinned()
-        val maxPins = proStatusManager.getPinnedConversationLimit(recipientRepository.getSelf().isPro)
+        val maxPins =
+            proStatusManager.getPinnedConversationLimit(recipientRepository.getSelf().isPro)
         if (pinned && totalPins >= maxPins) {
             // the user has reached the pin limit, show the CTA
             _dialogsState.update {
@@ -323,6 +374,10 @@ class HomeViewModel @Inject constructor(
                 viewModelScope.launch {
                     _uiEvents.emit(UiEvent.OpenProSettings(command.destination))
                 }
+            }
+
+            is Commands.HideSimpleDialog -> {
+                _dialogsState.update { it.copy(showSimpleDialog = null) }
             }
 
             is Commands.HideDonationCTADialog -> {
@@ -386,6 +441,7 @@ class HomeViewModel @Inject constructor(
         val showStartConversationSheet: StartConversationSheetData? = null,
         val proExpiringCTA: ProExpiringCTA? = null,
         val proExpiredCTA: Boolean = false,
+        val showSimpleDialog: SimpleDialogData? = null,
         val donationCTA: Boolean = false,
         val showUrlDialog: String? = null,
     )
@@ -405,6 +461,7 @@ class HomeViewModel @Inject constructor(
 
     sealed interface UiEvent {
         data class OpenProSettings(val start: ProSettingsDestination) : UiEvent
+        data object ShowWhiteListSystemDialog: UiEvent // once confirmed, this is for the system whitelist dialog
     }
 
     sealed interface Commands {
@@ -423,6 +480,8 @@ class HomeViewModel @Inject constructor(
 
         data object ShowStartConversationSheet : Commands
         data object HideStartConversationSheet : Commands
+
+        data object HideSimpleDialog: Commands
 
         data class GotoProSettings(
             val destination: ProSettingsDestination

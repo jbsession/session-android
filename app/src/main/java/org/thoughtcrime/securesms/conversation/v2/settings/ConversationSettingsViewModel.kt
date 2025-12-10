@@ -27,8 +27,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import network.loki.messenger.R
-import network.loki.messenger.libsession_util.ConfigBase.Companion.PRIORITY_HIDDEN
-import network.loki.messenger.libsession_util.ConfigBase.Companion.PRIORITY_VISIBLE
+import network.loki.messenger.libsession_util.PRIORITY_HIDDEN
+import network.loki.messenger.libsession_util.PRIORITY_VISIBLE
 import network.loki.messenger.libsession_util.util.ExpiryMode
 import org.session.libsession.database.StorageProtocol
 import org.session.libsession.messaging.groups.GroupManagerV2
@@ -279,21 +279,38 @@ class ConversationSettingsViewModel @AssistedInject constructor(
         )
     }
 
-    private val optionLeaveGroup: OptionsItem by lazy{
+    private val optionManageAdmins: OptionsItem by lazy{
+        OptionsItem(
+            name = context.getString(R.string.manageAdmins),
+            icon = R.drawable.ic_add_admin_custom,
+            qaTag = R.string.qa_conversation_settings_manage_admins,
+            onClick = {
+                (address as? Address.Group)?.let {
+                    navigateTo(ConversationSettingsDestination.RouteManageAdmins(it))
+                }
+            }
+        )
+    }
+
+    private val optionLeaveGroup: OptionsItem by lazy {
         OptionsItem(
             name = context.getString(R.string.groupLeave),
             icon = R.drawable.ic_log_out,
             qaTag = R.string.qa_conversation_settings_leave_group,
-            onClick = ::confirmLeaveGroup
+            onClick = ::handleLeaveOptionClick
         )
     }
 
-    private val optionDeleteGroup: OptionsItem by lazy{
+    // Delete group:
+    // - Admins can delete a group, even if other admins are still in the group
+    // - Non admins can sometimes see this option if they were kicked out of a group
+    //   In that case "delete" group is a fake delete, it's really only there to remove the "broken" group
+    private val optionDeleteGroup: OptionsItem by lazy {
         OptionsItem(
             name = context.getString(R.string.groupDelete),
             icon = R.drawable.ic_trash_2,
             qaTag = R.string.qa_conversation_settings_delete_group,
-            onClick = ::confirmLeaveGroup
+            onClick = ::confirmDeleteGroup
         )
     }
 
@@ -566,6 +583,7 @@ class ConversationSettingsViewModel @AssistedInject constructor(
                         dangerOptions.addAll(
                             listOf(
                                 optionClearMessages,
+                                optionLeaveGroup,
                                 optionDeleteGroup
                             )
                         )
@@ -574,6 +592,7 @@ class ConversationSettingsViewModel @AssistedInject constructor(
                         adminOptions.addAll(
                             listOf(
                                 optionManageMembers,
+                                optionManageAdmins,
                                 optionDisappearingMessage(disappearingSubtitle)
                             )
                         )
@@ -713,14 +732,17 @@ class ConversationSettingsViewModel @AssistedInject constructor(
     private fun pinConversation(){
         // check the pin limit before continuing
         val totalPins = storage.getTotalPinned()
-        val maxPins = proStatusManager.getPinnedConversationLimit(recipientRepository.getSelf().isPro)
-        if(totalPins >= maxPins){
+        val maxPins =
+            proStatusManager.getPinnedConversationLimit(recipientRepository.getSelf().isPro)
+        if (totalPins >= maxPins) {
             // the user has reached the pin limit, show the CTA
             _dialogState.update {
-                it.copy(pinCTA = PinProCTA(
-                    overTheLimit = totalPins > maxPins,
-                    proSubscription = proStatusManager.proDataState.value.type
-                ))
+                it.copy(
+                    pinCTA = PinProCTA(
+                        overTheLimit = totalPins > maxPins,
+                        proSubscription = proStatusManager.proDataState.value.type
+                    )
+                )
             }
         } else {
             viewModelScope.launch {
@@ -1007,7 +1029,118 @@ class ConversationSettingsViewModel @AssistedInject constructor(
         }
     }
 
-    private fun confirmLeaveGroup(){
+    /**
+     * Entry point for the "Leave group" menu item.
+     *
+     * - For admins, branches to an admin-specific flow (only admin vs multiple admins).
+     * - For non-admins, just shows a standard leave confirmation and leaves the group.
+     */
+    private fun handleLeaveOptionClick(){
+        val groupV2Id = (address as? Address.Group)?.accountId ?: return
+        val isAdmin = groupManagerV2.isCurrentUserGroupAdmin(groupV2Id)
+
+        if(isAdmin){
+            confirmAdminLeaveGroup()
+        }else{
+            confirmLeaveGroup()
+        }
+    }
+
+    /**
+     * Admin-specific "Leave group" confirmation.
+     *
+     * @param isUserLastAdmin Whether the current user is the only admin.
+     *
+     * Behavior:
+     * - If there is only one admin:
+     *   - Primary action: go to Manage Admins (so they can promote others).
+     *   - Secondary action: open a second confirmation to delete/leave the group.
+     *
+     * - If there are multiple admins:
+     *   - Primary action: leave the group without deleting it.
+     *   - Secondary action: do nothing.
+     */
+    private fun confirmAdminLeaveGroup(){
+        val groupV2Id = (address as? Address.Group)?.accountId ?: return
+        val isUserLastAdmin = groupManager.isCurrentUserLastAdmin(groupV2Id)
+
+        _dialogState.update { state ->
+            val dialogData = groupManager.getLeaveGroupConfirmationDialogData(
+                groupV2Id,
+                _uiState.value.name
+            ) ?: return
+
+            state.copy(
+                showSimpleDialog = SimpleDialogData(
+                    title = dialogData.title,
+                    message = dialogData.message,
+                    positiveText = context.getString(dialogData.positiveText),
+                    negativeText = context.getString(dialogData.negativeText),
+                    positiveQaTag = dialogData.positiveQaTag?.let { context.getString(it) },
+                    negativeQaTag = dialogData.negativeQaTag?.let { context.getString(it) },
+                    onPositive = {
+                        if (isUserLastAdmin){// option to add new admin(s)
+                            // Calling this to have the ManageAdminScreen in the backstack so we can
+                            // get its VM and PromoteMembersScreen can navigate back to it after sending promotions
+                            navigateTo(
+                                ConversationSettingsDestination.RouteManageAdmins(
+                                    groupAddress = address,
+                                    navigateToPromoteMembers = true
+                                )
+                            )
+                        }else{
+                            // there are other admins so admin can leave without deleting
+                            leaveGroup()
+                        }
+                    },
+                    positiveStyleDanger = !isUserLastAdmin,
+                    onNegative = {
+                        // Show confirmation dialog to delete or leave the group
+                        // put True here since this option is to "Delete Group"
+                        if (isUserLastAdmin) confirmDeleteGroup()
+                    },
+                    showXIcon = dialogData.showCloseButton,
+                    negativeStyleDanger = isUserLastAdmin // red color on the right
+                )
+            )
+        }
+    }
+
+    private fun confirmDeleteGroup() {
+        val groupV2Id = (address as? Address.Group)?.accountId ?: return
+        _dialogState.update { state ->
+            val dialogData = groupManager.getDeleteGroupConfirmationDialogData(
+                groupV2Id,
+                _uiState.value.name
+            ) ?: return
+
+            state.copy(
+                showSimpleDialog = SimpleDialogData(
+                    title = dialogData.title,
+                    message = dialogData.message,
+                    positiveText = context.getString(dialogData.positiveText),
+                    negativeText = context.getString(dialogData.negativeText),
+                    positiveQaTag = dialogData.positiveQaTag?.let { context.getString(it) },
+                    negativeQaTag = dialogData.negativeQaTag?.let { context.getString(it) },
+                    onPositive = { leaveGroup(deleteGroup = groupManagerV2.isCurrentUserGroupAdmin(groupV2Id)) },
+                    showXIcon = dialogData.showCloseButton
+                )
+            )
+        }
+    }
+
+    /**
+     * Show the confirmation dialog for leaving the group.
+     *
+     * This is used for:
+     *  - Non-admins leaving the group
+     *  - Admins confirming "Delete group"
+     *  - Users cleaning up a kicked/destroyed group
+     *
+     * @param deleteGroup this will be passed on to [leaveGroup] to determine if
+     * we want to Delete the group or simply Leave.
+     */
+    private fun confirmLeaveGroup() {
         val groupV2Id = (address as? Address.Group)?.accountId ?: return
         _dialogState.update { state ->
             val dialogData = groupManager.getLeaveGroupConfirmationDialogData(
@@ -1021,27 +1154,35 @@ class ConversationSettingsViewModel @AssistedInject constructor(
                     message = dialogData.message,
                     positiveText = context.getString(dialogData.positiveText),
                     negativeText = context.getString(dialogData.negativeText),
-                    positiveQaTag = dialogData.positiveQaTag?.let{ context.getString(it) },
-                    negativeQaTag = dialogData.negativeQaTag?.let{ context.getString(it) },
-                    onPositive = ::leaveGroup,
-                    onNegative = {}
+                    positiveQaTag = dialogData.positiveQaTag?.let { context.getString(it) },
+                    negativeQaTag = dialogData.negativeQaTag?.let { context.getString(it) },
+                    onPositive = { leaveGroup() },
+                    showXIcon = dialogData.showCloseButton
                 )
             )
         }
     }
 
-    private fun leaveGroup() {
+    /**
+     * @param deleteGroup will determine if we want to Delete the group or simply leave.
+     *
+     * Note that the worker will always delete the group if the only admin tries to leave.
+     */
+    private fun leaveGroup(deleteGroup: Boolean = false) {
         val conversation = recipient ?: return
         viewModelScope.launch {
             showLoading()
 
             try {
                 withContext(Dispatchers.Default) {
-                    groupManagerV2.leaveGroup(AccountId(conversation.address.toString()))
+                    groupManagerV2.leaveGroup(
+                        groupId = AccountId(conversation.address.toString()),
+                        deleteGroup = deleteGroup
+                    )
                 }
                 hideLoading()
                 goBackHome()
-            } catch (e: Exception){
+            } catch (e: Exception) {
                 hideLoading()
 
                 val txt = Phrase.from(context, R.string.groupLeaveErrorFailed)

@@ -10,12 +10,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import network.loki.messenger.R
-import network.loki.messenger.libsession_util.ConfigBase.Companion.PRIORITY_HIDDEN
-import network.loki.messenger.libsession_util.ConfigBase.Companion.PRIORITY_VISIBLE
+import network.loki.messenger.libsession_util.PRIORITY_HIDDEN
+import network.loki.messenger.libsession_util.PRIORITY_VISIBLE
 import network.loki.messenger.libsession_util.ED25519
 import network.loki.messenger.libsession_util.util.BaseCommunityInfo
 import network.loki.messenger.libsession_util.util.BlindKeyAPI
 import network.loki.messenger.libsession_util.util.ExpiryMode
+import network.loki.messenger.libsession_util.util.Util
 import org.session.libsession.database.MessageDataProvider
 import org.session.libsession.database.StorageProtocol
 import org.session.libsession.database.userAuth
@@ -47,6 +48,7 @@ import org.session.libsession.messaging.utilities.MessageAuthentication.buildInf
 import org.session.libsession.messaging.utilities.MessageAuthentication.buildMemberChangeSignature
 import org.session.libsession.messaging.utilities.WebRtcUtils
 import org.session.libsession.snode.SnodeAPI
+import org.session.libsession.snode.SnodeClock
 import org.session.libsession.utilities.Address
 import org.session.libsession.utilities.Address.Companion.toAddress
 import org.session.libsession.utilities.ConfigFactoryProtocol
@@ -60,7 +62,7 @@ import org.session.libsession.utilities.recipients.RecipientData
 import org.session.libsession.utilities.recipients.getType
 import org.session.libsession.utilities.updateContact
 import org.session.libsession.utilities.upsertContact
-import org.session.libsignal.protos.SignalServiceProtos
+import org.session.protos.SessionProtos
 import org.session.libsignal.utilities.AccountId
 import org.session.libsignal.utilities.Hex
 import org.session.libsignal.utilities.IdPrefix
@@ -103,11 +105,12 @@ class ReceivedMessageHandler @Inject constructor(
     private val configFactory: ConfigFactoryProtocol,
     private val messageRequestResponseHandler: Provider<MessageRequestResponseHandler>,
     private val prefs: TextSecurePreferences,
+    private val clock: SnodeClock,
 ) {
 
     suspend fun handle(
         message: Message,
-        proto: SignalServiceProtos.Content,
+        proto: SessionProtos.Content,
         threadId: Long,
         threadAddress: Address.Conversable,
     ) {
@@ -136,7 +139,7 @@ class ReceivedMessageHandler @Inject constructor(
             }
             is DataExtractionNotification -> handleDataExtractionNotification(message)
             is UnsendRequest -> handleUnsendRequest(message)
-            is MessageRequestResponse -> messageRequestResponseHandler.get().handleExplicitRequestResponseMessage(null, message, proto)
+            is MessageRequestResponse -> messageRequestResponseHandler.get().handleExplicitRequestResponseMessage(null, message, proto, null)
             is VisibleMessage -> handleVisibleMessage(
                 message = message,
                 proto = proto,
@@ -294,7 +297,7 @@ class ReceivedMessageHandler @Inject constructor(
 
     suspend fun handleVisibleMessage(
         message: VisibleMessage,
-        proto: SignalServiceProtos.Content,
+        proto: SessionProtos.Content,
         context: VisibleMessageHandlerContext,
         runThreadUpdate: Boolean,
         runProfileUpdate: Boolean
@@ -394,7 +397,7 @@ class ReceivedMessageHandler @Inject constructor(
 
             // Verify the incoming message length and truncate it if needed, before saving it to the db
             val maxChars = proStatusManager.getIncomingMessageMaxLength(message)
-            val messageText = message.text?.take(maxChars) // truncate to max char limit for this message
+            val messageText = message.text?.let { Util.truncateCodepoints(it, maxChars) } // truncate to max char limit for this message
             message.text = messageText
             message.hasMention = listOfNotNull(userPublicKey, context.userBlindedKey)
                 .any { key ->
@@ -447,7 +450,7 @@ class ReceivedMessageHandler @Inject constructor(
             // - must be done after the message is persisted)
             // - must be done after neccessary contact is created
             if (runProfileUpdate && senderAddress is Address.WithAccountId) {
-                val updates = ProfileUpdateHandler.Updates.create(proto)
+                val updates = ProfileUpdateHandler.Updates.create(proto, clock.currentTimeMills(), null)
 
                 if (updates != null) {
                     profileUpdateHandler.get().handleProfileUpdate(
@@ -486,7 +489,7 @@ class ReceivedMessageHandler @Inject constructor(
         return null
     }
 
-    private fun handleGroupUpdated(message: GroupUpdated, closedGroup: AccountId?, proto: SignalServiceProtos.Content) {
+    private fun handleGroupUpdated(message: GroupUpdated, closedGroup: AccountId?, proto: SessionProtos.Content) {
         val inner = message.inner
         if (closedGroup == null &&
             !inner.hasInviteMessage() && !inner.hasPromoteMessage()) {
@@ -494,7 +497,7 @@ class ReceivedMessageHandler @Inject constructor(
         }
 
         // Update profile if needed
-        ProfileUpdateHandler.Updates.create(proto)?.let { updates ->
+        ProfileUpdateHandler.Updates.create(proto, clock.currentTimeMills(), null)?.let { updates ->
             profileUpdateHandler.get().handleProfileUpdate(
                 senderId = AccountId(message.sender!!),
                 updates = updates,
@@ -584,7 +587,7 @@ class ReceivedMessageHandler @Inject constructor(
         groupManagerV2.handleGroupInfoChange(message, closedGroup)
     }
 
-    private fun handlePromotionMessage(message: GroupUpdated, proto: SignalServiceProtos.Content) {
+    private fun handlePromotionMessage(message: GroupUpdated, proto: SessionProtos.Content) {
         val promotion = message.inner.promoteMessage
         val seed = promotion.groupIdentitySeed.toByteArray()
         val sender = message.sender!!
@@ -622,7 +625,7 @@ class ReceivedMessageHandler @Inject constructor(
         }
     }
 
-    private fun handleNewLibSessionClosedGroupMessage(message: GroupUpdated, proto: SignalServiceProtos.Content) {
+    private fun handleNewLibSessionClosedGroupMessage(message: GroupUpdated, proto: SessionProtos.Content) {
         val storage = storage
         val ourUserId = storage.getUserPublicKey()!!
         val invite = message.inner.inviteMessage
@@ -700,10 +703,10 @@ class ReceivedMessageHandler @Inject constructor(
 
 //endregion
 
-private fun SignalServiceProtos.Content.ExpirationType.expiryMode(durationSeconds: Long) = takeIf { durationSeconds > 0 }?.let {
+private fun SessionProtos.Content.ExpirationType.expiryMode(durationSeconds: Long) = takeIf { durationSeconds > 0 }?.let {
     when (it) {
-        SignalServiceProtos.Content.ExpirationType.DELETE_AFTER_READ -> ExpiryMode.AfterRead(durationSeconds)
-        SignalServiceProtos.Content.ExpirationType.DELETE_AFTER_SEND, SignalServiceProtos.Content.ExpirationType.UNKNOWN -> ExpiryMode.AfterSend(durationSeconds)
+        SessionProtos.Content.ExpirationType.DELETE_AFTER_READ -> ExpiryMode.AfterRead(durationSeconds)
+        SessionProtos.Content.ExpirationType.DELETE_AFTER_SEND, SessionProtos.Content.ExpirationType.UNKNOWN -> ExpiryMode.AfterSend(durationSeconds)
         else -> ExpiryMode.NONE
     }
 } ?: ExpiryMode.NONE

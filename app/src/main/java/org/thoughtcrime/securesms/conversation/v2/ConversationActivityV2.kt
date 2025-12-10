@@ -59,7 +59,6 @@ import androidx.recyclerview.widget.RecyclerView
 import com.annimon.stream.Stream
 import com.bumptech.glide.Glide
 import com.squareup.phrase.Phrase
-import dagger.Lazy
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.lifecycle.withCreationCallback
 import kotlinx.coroutines.CancellationException
@@ -97,6 +96,7 @@ import org.session.libsession.messaging.open_groups.OpenGroupApi
 import org.session.libsession.messaging.sending_receiving.MessageSender
 import org.session.libsession.messaging.sending_receiving.attachments.Attachment
 import org.session.libsession.messaging.sending_receiving.link_preview.LinkPreview
+import org.session.libsession.messaging.sending_receiving.notifications.MessageNotifier
 import org.session.libsession.messaging.sending_receiving.quotes.QuoteModel
 import org.session.libsession.snode.SnodeAPI
 import org.session.libsession.snode.SnodeClock
@@ -119,7 +119,6 @@ import org.session.libsignal.crypto.MnemonicCodec
 import org.session.libsignal.utilities.ListenableFuture
 import org.session.libsignal.utilities.Log
 import org.session.libsignal.utilities.toHexString
-import org.thoughtcrime.securesms.ApplicationContext
 import org.thoughtcrime.securesms.FullComposeActivity.Companion.applyCommonPropertiesForCompose
 import org.thoughtcrime.securesms.ScreenLockActionBarActivity
 import org.thoughtcrime.securesms.audio.AudioRecorderHandle
@@ -135,7 +134,6 @@ import org.thoughtcrime.securesms.conversation.v2.MessageDetailActivity.Companio
 import org.thoughtcrime.securesms.conversation.v2.MessageDetailActivity.Companion.ON_REPLY
 import org.thoughtcrime.securesms.conversation.v2.MessageDetailActivity.Companion.ON_RESEND
 import org.thoughtcrime.securesms.conversation.v2.MessageDetailActivity.Companion.ON_SAVE
-import org.thoughtcrime.securesms.conversation.v2.dialogs.BlockedDialog
 import org.thoughtcrime.securesms.conversation.v2.dialogs.LinkPreviewDialog
 import org.thoughtcrime.securesms.conversation.v2.input_bar.InputBarButton
 import org.thoughtcrime.securesms.conversation.v2.input_bar.InputBarDelegate
@@ -158,7 +156,6 @@ import org.thoughtcrime.securesms.conversation.v2.utilities.AttachmentManager
 import org.thoughtcrime.securesms.conversation.v2.utilities.MentionUtilities
 import org.thoughtcrime.securesms.conversation.v2.utilities.ResendMessageUtilities
 import org.thoughtcrime.securesms.crypto.MnemonicUtilities
-import org.thoughtcrime.securesms.database.AttachmentDatabase
 import org.thoughtcrime.securesms.database.GroupDatabase
 import org.thoughtcrime.securesms.database.LokiMessageDatabase
 import org.thoughtcrime.securesms.database.MmsDatabase
@@ -194,6 +191,7 @@ import org.thoughtcrime.securesms.mms.SlideDeck
 import org.thoughtcrime.securesms.mms.VideoSlide
 import org.thoughtcrime.securesms.permissions.Permissions
 import org.thoughtcrime.securesms.preferences.PrivacySettingsActivity
+import org.thoughtcrime.securesms.pro.ProStatusManager
 import org.thoughtcrime.securesms.reactions.ReactionsDialogFragment
 import org.thoughtcrime.securesms.reactions.any.ReactWithAnyEmojiDialogFragment
 import org.thoughtcrime.securesms.showSessionDialog
@@ -266,6 +264,8 @@ class ConversationActivityV2 : ScreenLockActionBarActivity(), InputBarDelegate,
     @Inject lateinit var clock: SnodeClock
     @Inject lateinit var messageSender: MessageSender
     @Inject lateinit var resendMessageUtilities: ResendMessageUtilities
+    @Inject lateinit var messageNotifier: MessageNotifier
+    @Inject lateinit var proStatusManager: ProStatusManager
     @Inject @ManagerScope
     lateinit var scope: CoroutineScope
 
@@ -475,7 +475,9 @@ class ConversationActivityV2 : ScreenLockActionBarActivity(), InputBarDelegate,
     }
 
     private val isScrolledToBottom: Boolean
-        get() = binding.conversationRecyclerView.isNearBottom
+        get() = with(binding.conversationRecyclerView){
+            !canScrollVertically(1) || isNearBottom
+        }
 
     // When the user clicks on the original message in a reply then we scroll to and highlight that original
     // message. To do this we keep track of the replied-to message's location in the recycler view.
@@ -546,12 +548,12 @@ class ConversationActivityV2 : ScreenLockActionBarActivity(), InputBarDelegate,
 
         // Check if address is null before proceeding with initialization
         if (
-                IntentCompat.getParcelableExtra(
-                    intent,
-                    ADDRESS,
-                    Address.Conversable::class.java
-                ) == null &&
-                intent.data?.getQueryParameter(ADDRESS).isNullOrEmpty()
+            IntentCompat.getParcelableExtra(
+                intent,
+                ADDRESS,
+                Address.Conversable::class.java
+            ) == null &&
+            intent.data?.getQueryParameter(ADDRESS).isNullOrEmpty()
         ) {
             Log.w(TAG, "ConversationActivityV2 launched without ADDRESS extra - Returning home")
             val intent = Intent(this, HomeActivity::class.java).apply {
@@ -779,12 +781,12 @@ class ConversationActivityV2 : ScreenLockActionBarActivity(), InputBarDelegate,
 
     override fun onResume() {
         super.onResume()
-        ApplicationContext.getInstance(this).messageNotifier.setVisibleThread(viewModel.threadId)
+        messageNotifier.setVisibleThread(viewModel.threadId)
     }
 
     override fun onPause() {
         super.onPause()
-        ApplicationContext.getInstance(this).messageNotifier.setVisibleThread(-1)
+        messageNotifier.setVisibleThread(-1)
     }
 
     override fun getSystemService(name: String): Any? {
@@ -917,22 +919,22 @@ class ConversationActivityV2 : ScreenLockActionBarActivity(), InputBarDelegate,
     // called from onCreate
     private fun setUpToolBar() {
         binding.conversationAppBar.setThemedContent {
-           val data by viewModel.appBarData.collectAsState()
-           val query by searchViewModel.searchQuery.collectAsState()
+            val data by viewModel.appBarData.collectAsState()
+            val query by searchViewModel.searchQuery.collectAsState()
 
-           ConversationAppBar(
-               data = data,
-               onBackPressed = ::finish,
-               onCallPressed = ::callRecipient,
-               searchQuery = query ?: "",
-               onSearchQueryChanged = ::onSearchQueryUpdated,
-               onSearchQueryClear = {  onSearchQueryUpdated("") },
-               onSearchCanceled = ::onSearchClosed,
-               onAvatarPressed = {
-                   val intent = ConversationSettingsActivity.createIntent(this, address)
-                   settingsLauncher.launch(intent)
-               }
-           )
+            ConversationAppBar(
+                data = data,
+                onBackPressed = ::finish,
+                onCallPressed = ::callRecipient,
+                searchQuery = query ?: "",
+                onSearchQueryChanged = ::onSearchQueryUpdated,
+                onSearchQueryClear = {  onSearchQueryUpdated("") },
+                onSearchCanceled = ::onSearchClosed,
+                onAvatarPressed = {
+                    val intent = ConversationSettingsActivity.createIntent(this, address)
+                    settingsLauncher.launch(intent)
+                }
+            )
         }
     }
 
@@ -956,6 +958,30 @@ class ConversationActivityV2 : ScreenLockActionBarActivity(), InputBarDelegate,
 
     // called from onCreate
     private fun restoreDraftIfNeeded() {
+        // Handle Multiple Streams (ACTION_SEND_MULTIPLE)
+        if (intent.action == Intent.ACTION_SEND_MULTIPLE && intent.hasExtra(Intent.EXTRA_STREAM)) {
+            val uris = intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)
+            if (!uris.isNullOrEmpty()) {
+                val mediaList = uris.mapNotNull { uri ->
+                    val mime = MediaUtil.getMimeType(this, uri)
+                    if (mime != null) {
+                        val filename = FilenameUtils.getFilenameFromUri(this, uri)
+                        Media(uri, filename, mime, 0, 0, 0, 0, null, null)
+                    } else null
+                }
+
+                if (mediaList.isNotEmpty()) {
+                    startActivityForResult(MediaSendActivity.buildEditorIntent(
+                        this,
+                        mediaList,
+                        viewModel.recipient.address,
+                        getMessageBody()
+                    ), PICK_FROM_LIBRARY)
+                    return
+                }
+            }
+        }
+
         val mediaURI = intent.data
         val mediaType = AttachmentManager.MediaType.from(intent.type)
         val mimeType =  MediaUtil.getMimeType(this, mediaURI)
@@ -964,7 +990,7 @@ class ConversationActivityV2 : ScreenLockActionBarActivity(), InputBarDelegate,
             val filename = FilenameUtils.getFilenameFromUri(this, mediaURI)
 
             if (mimeType != null &&
-                        (AttachmentManager.MediaType.IMAGE == mediaType ||
+                (AttachmentManager.MediaType.IMAGE == mediaType ||
                         AttachmentManager.MediaType.GIF    == mediaType ||
                         AttachmentManager.MediaType.VIDEO  == mediaType)
             ) {
@@ -1579,8 +1605,8 @@ class ConversationActivityV2 : ScreenLockActionBarActivity(), InputBarDelegate,
             title(R.string.block)
             text(
                 Phrase.from(context, R.string.blockDescription)
-                .put(NAME_KEY, name)
-                .format()
+                    .put(NAME_KEY, name)
+                    .format()
             )
             dangerButton(R.string.block, R.string.AccessibilityId_blockConfirm) {
                 viewModel.block()
@@ -1777,11 +1803,23 @@ class ConversationActivityV2 : ScreenLockActionBarActivity(), InputBarDelegate,
             return
         } else {
             // Put the message in the database
+            val messageId = originalMessage.messageId
+            val count = if (recipient.isCommunityRecipient) {
+                // ReactionRecord count is total number of reactions for this emoji/messageId in community,
+                // regardless of the author of each ReactionRecord.
+                // We set to the existing number for now and we'll increase all of them
+                // by 1 below.
+                originalMessage.reactions.firstOrNull { it.messageId == messageId && it.emoji == emoji }
+                    ?.count ?: 0
+            } else {
+                1
+            }
+
             val reaction = ReactionRecord(
-                messageId = originalMessage.messageId,
+                messageId = messageId,
                 author = author,
                 emoji = emoji,
-                count = 1,
+                count = count,
                 dateSent = emojiTimestamp,
                 dateReceived = emojiTimestamp
             )
@@ -1794,8 +1832,11 @@ class ConversationActivityV2 : ScreenLockActionBarActivity(), InputBarDelegate,
             // Send it
             reactionMessage.reaction = Reaction.from(originalMessage.timestamp, originalAuthor.toString(), emoji, true)
             if (recipient.address is Address.Community) {
+                // Increment the reaction count locally immediately. This
+                // has to apply on all the ReactionRecords with the same messageId/emoji per design.
+                reactionDb.updateAllCountFor(messageId, emoji, 1)
 
-                val messageServerId = lokiMessageDb.getServerID(originalMessage.messageId) ?:
+                val messageServerId = lokiMessageDb.getServerID(messageId) ?:
                     return Log.w(TAG, "Failed to find message server ID when adding emoji reaction")
 
                 scope.launch {
@@ -1831,7 +1872,7 @@ class ConversationActivityV2 : ScreenLockActionBarActivity(), InputBarDelegate,
         } else {
             reactionDb.deleteReaction(
                 emoji,
-                MessageId(originalMessage.id, originalMessage.isMms),
+                originalMessage.messageId,
                 author
             )
 
@@ -1847,9 +1888,13 @@ class ConversationActivityV2 : ScreenLockActionBarActivity(), InputBarDelegate,
             )
 
             if (recipient.address is Address.Community) {
+                // Decrement the reaction count locally immediately (they will
+                // get overwritten when we get the server update back)
+                reactionDb.updateAllCountFor(originalMessage.messageId, emoji, -1)
+
 
                 val messageServerId = lokiMessageDb.getServerID(originalMessage.messageId) ?:
-                    return Log.w(TAG, "Failed to find message server ID when removing emoji reaction")
+                return Log.w(TAG, "Failed to find message server ID when removing emoji reaction")
 
                 scope.launch {
                     runCatching {
@@ -2031,7 +2076,13 @@ class ConversationActivityV2 : ScreenLockActionBarActivity(), InputBarDelegate,
     override fun onReactionLongClicked(messageId: MessageId, emoji: String?) {
         if (viewModel.recipient.isGroupOrCommunityRecipient) {
             val isUserCommunityModerator = viewModel.recipient.takeIf { it.isCommunityRecipient }?.currentUserRole?.canModerate == true
-            val fragment = ReactionsDialogFragment.create(messageId, isUserCommunityModerator, emoji, viewModel.canRemoveReaction)
+            val fragment = ReactionsDialogFragment.create(
+                messageId,
+                isUserCommunityModerator,
+                emoji,
+                viewModel.canRemoveReaction,
+                viewModel.recipient.isCommunityRecipient
+            )
             fragment.show(supportFragmentManager, TAG_REACTION_FRAGMENT)
         }
     }
@@ -2056,9 +2107,11 @@ class ConversationActivityV2 : ScreenLockActionBarActivity(), InputBarDelegate,
     override fun sendMessage() {
         val recipient = viewModel.recipient
 
+        // It shouldn't be possible to send a message to a blocked user anymore.
+        // But as a safety net:
         // show the unblock dialog when trying to send a message to a blocked contact
         if (recipient.isStandardRecipient && recipient.blocked) {
-            BlockedDialog(recipient.address, recipient.displayName()).show(supportFragmentManager, "Blocked Dialog")
+            unblock()
             return
         }
 
@@ -2077,9 +2130,6 @@ class ConversationActivityV2 : ScreenLockActionBarActivity(), InputBarDelegate,
         if (sentMessageInfo != null) {
             messageToScrollAuthor.set(sentMessageInfo.first)
             messageToScrollTimestamp.set(sentMessageInfo.second)
-            binding.conversationRecyclerView.postDelayed({
-                binding.conversationRecyclerView.handleScrollToBottom()
-            }, 500L)
         }
     }
 
@@ -2126,6 +2176,8 @@ class ConversationActivityV2 : ScreenLockActionBarActivity(), InputBarDelegate,
         val message = VisibleMessage().applyExpiryMode(viewModel.address)
         message.sentTimestamp = sentTimestamp
         message.text = text
+        // pro features
+        proStatusManager.addProFeatures(message)
         val expiresInMillis = viewModel.recipient.expiryMode.expiryMillis
         val outgoingTextMessage = OutgoingTextMessage(
             message = message,
@@ -2188,6 +2240,8 @@ class ConversationActivityV2 : ScreenLockActionBarActivity(), InputBarDelegate,
         val expireStartedAtMs = if (viewModel.recipient.expiryMode is ExpiryMode.AfterSend) {
             sentTimestamp
         } else 0
+        // pro features
+        proStatusManager.addProFeatures(message)
         val outgoingTextMessage = OutgoingMediaMessage(
             message = message,
             recipient = recipient.address,

@@ -47,12 +47,12 @@ import org.thoughtcrime.securesms.home.startconversation.invitefriend.InviteFrie
 import org.thoughtcrime.securesms.home.startconversation.newmessage.NewMessage
 import org.thoughtcrime.securesms.home.startconversation.newmessage.NewMessageViewModel
 import org.thoughtcrime.securesms.home.startconversation.newmessage.State
-import org.thoughtcrime.securesms.openUrl
 import org.thoughtcrime.securesms.ui.NavigationAction
 import org.thoughtcrime.securesms.ui.ObserveAsEvents
 import org.thoughtcrime.securesms.ui.OpenURLAlertDialog
 import org.thoughtcrime.securesms.ui.UINavigator
 import org.thoughtcrime.securesms.ui.components.BaseBottomSheet
+import org.thoughtcrime.securesms.ui.handleIntent
 import org.thoughtcrime.securesms.ui.horizontalSlideComposable
 import org.thoughtcrime.securesms.ui.theme.PreviewTheme
 
@@ -148,7 +148,7 @@ fun StartConversationNavHost(
             NavigationAction.NavigateUp -> navController.navigateUp()
 
             is NavigationAction.NavigateToIntent -> {
-                navController.context.startActivity(action.intent)
+                navController.handleIntent(action.intent)
             }
 
             else -> {}
@@ -176,38 +176,36 @@ fun StartConversationNavHost(
             val viewModel = hiltViewModel<NewMessageViewModel>()
             val uiState by viewModel.state.collectAsState(State())
 
-            val helpUrl = "https://getsession.org/account-ids"
-
-            LaunchedEffect(Unit) {
-                scope.launch {
-                    viewModel.success.collect {
-                        context.startActivity(
-                            ConversationActivityV2.createIntent(
-                                context,
-                                address = it.address
+                LaunchedEffect(Unit) {
+                    scope.launch {
+                        viewModel.success.collect {
+                            context.startActivity(
+                                ConversationActivityV2.createIntent(
+                                    context,
+                                    address = it.address
+                                )
                             )
-                        )
 
-                        onClose()
+                            onClose()
+                        }
                     }
                 }
-            }
 
-            NewMessage(
-                uiState,
-                viewModel.qrErrors,
-                viewModel,
-                onBack = { scope.launch { navigator.navigateUp() } },
-                onClose = onClose,
-                onHelp = { viewModel.onCommand(NewMessageViewModel.Commands.ShowUrlDialog) }
-            )
-            if (uiState.showUrlDialog) {
-                OpenURLAlertDialog(
-                    url = helpUrl,
-                    onDismissRequest = { viewModel.onCommand(NewMessageViewModel.Commands.DismissUrlDialog) }
+                NewMessage(
+                    uiState,
+                    viewModel.qrErrors,
+                    viewModel,
+                    onBack = { scope.launch { navigator.navigateUp() } },
+                    onClose = onClose,
+                    onHelp = { viewModel.onCommand(NewMessageViewModel.Commands.ShowUrlDialog) }
                 )
+                if (uiState.showUrlDialog != null) {
+                    OpenURLAlertDialog(
+                        url = uiState.showUrlDialog!!,
+                        onDismissRequest = { viewModel.onCommand(NewMessageViewModel.Commands.DismissUrlDialog) }
+                    )
+                }
             }
-        }
 
         // Create Group
         horizontalSlideComposable<StartConversationDestination.CreateGroup> {

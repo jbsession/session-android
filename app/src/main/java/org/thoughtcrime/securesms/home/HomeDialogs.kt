@@ -12,17 +12,24 @@ import com.squareup.phrase.Phrase
 import kotlinx.coroutines.delay
 import network.loki.messenger.R
 import org.session.libsession.utilities.NonTranslatableStringConstants
+import org.session.libsession.utilities.StringSubstitutionConstants
 import org.session.libsession.utilities.StringSubstitutionConstants.APP_PRO_KEY
 import org.session.libsession.utilities.StringSubstitutionConstants.PRO_KEY
 import org.session.libsession.utilities.StringSubstitutionConstants.TIME_KEY
 import org.thoughtcrime.securesms.home.HomeViewModel.Commands.*
 import org.thoughtcrime.securesms.home.startconversation.StartConversationSheet
 import org.thoughtcrime.securesms.preferences.prosettings.ProSettingsDestination
+import org.thoughtcrime.securesms.ui.AlertDialog
 import org.thoughtcrime.securesms.ui.AnimatedSessionProCTA
 import org.thoughtcrime.securesms.ui.CTAFeature
+import org.thoughtcrime.securesms.ui.DialogButtonData
+import org.thoughtcrime.securesms.ui.GetString
 import org.thoughtcrime.securesms.ui.OpenURLAlertDialog
 import org.thoughtcrime.securesms.ui.PinProCTA
+import org.thoughtcrime.securesms.ui.SimpleSessionProCTA
 import org.thoughtcrime.securesms.ui.UserProfileModal
+import org.thoughtcrime.securesms.ui.components.annotatedStringResource
+import org.thoughtcrime.securesms.ui.theme.LocalColors
 import org.thoughtcrime.securesms.ui.theme.SessionMaterialTheme
 
 @Composable
@@ -31,6 +38,42 @@ fun HomeDialogs(
     sendCommand: (HomeViewModel.Commands) -> Unit
 ) {
     SessionMaterialTheme {
+        //  Simple dialogs
+        if (dialogsState.showSimpleDialog != null) {
+            val buttons = mutableListOf<DialogButtonData>()
+            if(dialogsState.showSimpleDialog.positiveText != null) {
+                buttons.add(
+                    DialogButtonData(
+                        text = GetString(dialogsState.showSimpleDialog.positiveText),
+                        color = if (dialogsState.showSimpleDialog.positiveStyleDanger) LocalColors.current.danger
+                        else LocalColors.current.text,
+                        qaTag = dialogsState.showSimpleDialog.positiveQaTag,
+                        onClick = dialogsState.showSimpleDialog.onPositive
+                    )
+                )
+            }
+            if(dialogsState.showSimpleDialog.negativeText != null){
+                buttons.add(
+                    DialogButtonData(
+                        text = GetString(dialogsState.showSimpleDialog.negativeText),
+                        qaTag = dialogsState.showSimpleDialog.negativeQaTag,
+                        onClick = dialogsState.showSimpleDialog.onNegative
+                    )
+                )
+            }
+
+            AlertDialog(
+                onDismissRequest = {
+                    // hide dialog
+                    sendCommand(HideSimpleDialog)
+                },
+                title = annotatedStringResource(dialogsState.showSimpleDialog.title),
+                text = annotatedStringResource(dialogsState.showSimpleDialog.message),
+                showCloseButton = dialogsState.showSimpleDialog.showXIcon,
+                buttons = buttons
+            )
+        }
+
         // pin CTA
         if(dialogsState.pinCTA != null){
             PinProCTA(
@@ -136,11 +179,11 @@ fun HomeDialogs(
                 positiveButtonText = stringResource(R.string.renew),
                 negativeButtonText = stringResource(R.string.cancel),
                 onUpgrade = {
-                    sendCommand(HomeViewModel.Commands.HideExpiredCTADialog)
-                    sendCommand(HomeViewModel.Commands.GotoProSettings(ProSettingsDestination.ChoosePlan))
+                    sendCommand(HideExpiredCTADialog)
+                    sendCommand(GotoProSettings(ProSettingsDestination.ChoosePlan))
                 },
                 onCancel = {
-                    sendCommand(HomeViewModel.Commands.HideExpiredCTADialog)
+                    sendCommand(HideExpiredCTADialog)
                 }
             )
         }
@@ -158,18 +201,19 @@ fun HomeDialogs(
 
         if (showDonation && dialogsState.donationCTA) {
             val context = LocalContext.current
-            AnimatedSessionProCTA(
-                heroImageBg = R.drawable.cta_hero_generic_bg,
-                heroImageAnimatedFg = R.drawable.cta_hero_generic_fg,
-                title = stringResource(R.string.proExpired), //todo DONATION need crowdin strings
-                showProBadge = false,
-                text = Phrase.from(context,R.string.proExpiredDescription)
-                    .put(PRO_KEY, NonTranslatableStringConstants.PRO)
-                    .put(APP_PRO_KEY, NonTranslatableStringConstants.APP_PRO)
+            SimpleSessionProCTA(
+                heroImage = R.drawable.cta_hero_flower,
+                title = Phrase.from(context,R.string.donateSessionHelp)
+                    .put(StringSubstitutionConstants.APP_NAME_KEY, NonTranslatableStringConstants.APP_NAME)
                     .format()
-                    .toString(),//todo DONATION need crowdin strings
+                    .toString(),
+                showProBadge = false,
+                text = Phrase.from(context,R.string.donateSessionDescription)
+                    .put(StringSubstitutionConstants.APP_NAME_KEY, NonTranslatableStringConstants.APP_NAME)
+                    .format()
+                    .toString(),
                 positiveButtonText = stringResource(R.string.donate),
-                negativeButtonText = stringResource(R.string.cancel), //todo DONATION need crowdin strings
+                negativeButtonText = stringResource(R.string.maybeLater),
                 onUpgrade = {
                     sendCommand(HideDonationCTADialog)
                     sendCommand(ShowDonationConfirmation)

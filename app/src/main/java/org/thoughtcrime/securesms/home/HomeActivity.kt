@@ -11,8 +11,11 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.viewModels
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -42,11 +45,12 @@ import kotlinx.coroutines.withContext
 import network.loki.messenger.BuildConfig
 import network.loki.messenger.R
 import network.loki.messenger.databinding.ActivityHomeBinding
-import network.loki.messenger.libsession_util.ConfigBase.Companion.PRIORITY_HIDDEN
+import network.loki.messenger.libsession_util.PRIORITY_HIDDEN
 import org.session.libsession.messaging.groups.GroupManagerV2
 import org.session.libsession.messaging.groups.LegacyGroupDeprecationManager
 import org.session.libsession.messaging.jobs.JobQueue
 import org.session.libsession.messaging.sending_receiving.notifications.MessageNotifier
+import org.session.libsession.snode.OnionRequestAPI
 import org.session.libsession.snode.SnodeClock
 import org.session.libsession.utilities.Address
 import org.session.libsession.utilities.StringSubstitutionConstants.GROUP_NAME_KEY
@@ -56,7 +60,6 @@ import org.session.libsession.utilities.recipients.RecipientData
 import org.session.libsession.utilities.recipients.displayName
 import org.session.libsession.utilities.updateContact
 import org.session.libsignal.utilities.Log
-import org.thoughtcrime.securesms.ApplicationContext
 import org.thoughtcrime.securesms.ScreenLockActionBarActivity
 import org.thoughtcrime.securesms.auth.LoginStateRepository
 import org.thoughtcrime.securesms.conversation.v2.ConversationActivityV2
@@ -86,11 +89,17 @@ import org.thoughtcrime.securesms.reviews.ui.InAppReview
 import org.thoughtcrime.securesms.reviews.ui.InAppReviewViewModel
 import org.thoughtcrime.securesms.showSessionDialog
 import org.thoughtcrime.securesms.tokenpage.TokenPageNotificationManager
+import org.thoughtcrime.securesms.ui.PathDot
 import org.thoughtcrime.securesms.ui.components.Avatar
+import org.thoughtcrime.securesms.ui.requestDozeWhitelist
 import org.thoughtcrime.securesms.ui.setThemedContent
+import org.thoughtcrime.securesms.ui.theme.LocalColors
 import org.thoughtcrime.securesms.ui.theme.LocalDimensions
+import org.thoughtcrime.securesms.ui.theme.primaryGreen
+import org.thoughtcrime.securesms.util.AvatarBadge
 import org.thoughtcrime.securesms.util.AvatarUtils
 import org.thoughtcrime.securesms.util.DateUtils
+import org.thoughtcrime.securesms.util.applyBottomInsetMargin
 import org.thoughtcrime.securesms.util.applySafeInsetsMargins
 import org.thoughtcrime.securesms.util.applySafeInsetsPaddings
 import org.thoughtcrime.securesms.util.disableClipping
@@ -217,6 +226,8 @@ class HomeActivity : ScreenLockActionBarActivity(),
             val recipient by recipientRepository.observeSelf()
                 .collectAsState(null)
 
+            val pathStatus by  OnionRequestAPI.pathStatus.collectAsState()
+
             Avatar(
                 size = LocalDimensions.current.iconMediumAvatar,
                 data = avatarUtils.getUIDataFromRecipient(recipient),
@@ -224,6 +235,24 @@ class HomeActivity : ScreenLockActionBarActivity(),
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     onClick = ::openSettings
+                ),
+                badge = AvatarBadge.ComposeBadge(
+                    content = {
+                        val glowSize = LocalDimensions.current.xxxsSpacing
+                        Crossfade(
+                            targetState = when (pathStatus){
+                            OnionRequestAPI.PathStatus.BUILDING -> LocalColors.current.warning
+                            OnionRequestAPI.PathStatus.ERROR -> LocalColors.current.danger
+                            else -> primaryGreen
+                        }, label = "path") {
+                            PathDot(
+                                modifier = Modifier.offset(glowSize*0.5f, glowSize*0.5f),
+                                dotSize = LocalDimensions.current.xxsSpacing,
+                                glowSize = glowSize,
+                                color = it
+                            )
+                        }
+                    }
                 )
             )
         }
@@ -269,6 +298,10 @@ class HomeActivity : ScreenLockActionBarActivity(),
                                     event.start
                                 )
                             )
+                        }
+
+                        is HomeViewModel.UiEvent.ShowWhiteListSystemDialog -> {
+                            requestDozeWhitelist()
                         }
                     }
                 }
@@ -571,7 +604,7 @@ class HomeActivity : ScreenLockActionBarActivity(),
 
     override fun onPause() {
         super.onPause()
-        ApplicationContext.getInstance(this).messageNotifier.setHomeScreenVisible(false)
+        messageNotifier.setHomeScreenVisible(false)
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
@@ -756,7 +789,7 @@ class HomeActivity : ScreenLockActionBarActivity(),
 
         if (recipient.address is Address.Group) {
             confirmAndLeaveGroup(
-                dialogData = groupManagerV2.getLeaveGroupConfirmationDialogData(recipient.address.accountId, recipient.displayName())
+                dialogData = groupManagerV2.getDeleteGroupConfirmationDialogData(recipient.address.accountId, recipient.displayName())
             ) {
                 homeViewModel.leaveGroup(recipient.address.accountId)
             }
@@ -931,9 +964,9 @@ class HomeActivity : ScreenLockActionBarActivity(),
             }
         )
 
-        binding.newConversationButton.applySafeInsetsMargins(
+        binding.newConversationButton.applyBottomInsetMargin(
             typeMask = WindowInsetsCompat.Type.navigationBars(),
-            additionalInsets = Insets.of(0,0,0, resources.getDimensionPixelSize(R.dimen.new_conversation_button_bottom_offset))
+            extraBottom = resources.getDimensionPixelSize(R.dimen.new_conversation_button_bottom_offset)
         )
     }
 }

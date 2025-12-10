@@ -11,9 +11,11 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.BasicAlertDialog
@@ -39,11 +41,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import com.squareup.phrase.Phrase
 import network.loki.messenger.R
 import org.session.libsession.utilities.StringSubstitutionConstants.URL_KEY
 import org.thoughtcrime.securesms.copyURLToClipboard
-import org.thoughtcrime.securesms.openUrl
 import org.thoughtcrime.securesms.ui.components.CircularProgressIndicator
 import org.thoughtcrime.securesms.ui.components.annotatedStringResource
 import org.thoughtcrime.securesms.ui.theme.LocalColors
@@ -71,6 +73,8 @@ data class SimpleDialogData(
     val message: CharSequence,
     val positiveText: String? = null,
     val positiveStyleDanger: Boolean = true,
+
+    val negativeStyleDanger: Boolean = false,
     val showXIcon: Boolean = false,
     val negativeText: String? = null,
     val positiveQaTag: String? = null,
@@ -114,7 +118,7 @@ fun AlertDialog(
     showCloseButton: Boolean = false,
     content: @Composable () -> Unit = {}
 ) {
-    BasicAlertDialog(
+    BasicSessionAlertDialog(
         modifier = modifier,
         onDismissRequest = onDismissRequest,
         content = {
@@ -127,6 +131,36 @@ fun AlertDialog(
                 showCloseButton = showCloseButton,
                 content = content
             )
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BasicSessionAlertDialog(
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit = {}
+){
+    BasicAlertDialog(
+        modifier = modifier,
+        onDismissRequest = onDismissRequest,
+        properties = DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = true
+        ),
+        content = {
+            // control content size
+            Box(
+                modifier = Modifier
+                    .widthIn(max = LocalDimensions.current.maxDialogWidth)
+                    .fillMaxWidth(0.85f),
+                contentAlignment = Alignment.Center
+            ) {
+                content()
+            }
         }
     )
 }
@@ -211,8 +245,8 @@ fun AlertDialogContent(
                             color = it.color,
                             enabled = it.enabled
                         ) {
-                            it.onClick()
                             if (it.dismissOnClick) onDismissRequest()
+                            it.onClick()
                         }
                     }
                 }
@@ -248,9 +282,12 @@ fun OpenURLAlertDialog(
             DialogButtonData(
                 text = GetString(R.string.open),
                 color = LocalColors.current.danger,
+                dismissOnClick = false,
                 onClick = {
-                    onLinkOpened(url)
-                    context.openUrl(url)
+                    if(context.openUrl(url)){
+                        onLinkOpened(url)
+                        onDismissRequest()
+                    }
                 }
             ),
             DialogButtonData(
@@ -329,17 +366,14 @@ fun LoadingDialog(
     modifier: Modifier = Modifier,
     title: String? = null,
 ){
-    BasicAlertDialog(
+    BasicSessionAlertDialog(
         modifier = modifier,
         onDismissRequest = {},
         content = {
             if (title.isNullOrBlank()) {
-                Box {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center),
-                        color = LocalColors.current.accent
-                    )
-                }
+                CircularProgressIndicator(
+                    color = LocalColors.current.accent
+                )
             } else {
                 DialogBg {
                     Column(
@@ -440,9 +474,21 @@ fun PreviewOpenURLDialog() {
 @Composable
 fun PreviewLoadingDialog() {
     PreviewTheme {
-        LoadingDialog(
-            title = stringResource(R.string.warning)
-        )
+        Box(Modifier.background(Color.White).fillMaxSize()) {
+            LoadingDialog()
+        }
+    }
+}
+
+@Preview
+@Composable
+fun PreviewLoadingTextDialog() {
+    PreviewTheme {
+        Box(Modifier.background(Color.White).fillMaxSize()) {
+            LoadingDialog(
+                title = stringResource(R.string.warning)
+            )
+        }
     }
 }
 

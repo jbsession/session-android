@@ -40,6 +40,7 @@ import org.session.libsignal.utilities.Snode
 import org.thoughtcrime.securesms.ScreenLockActionBarActivity
 import org.thoughtcrime.securesms.reviews.InAppReviewManager
 import org.thoughtcrime.securesms.ui.getSubbedString
+import org.thoughtcrime.securesms.ui.openUrl
 import org.thoughtcrime.securesms.util.GlowViewUtilities
 import org.thoughtcrime.securesms.util.IP2Country
 import org.thoughtcrime.securesms.util.PathDotView
@@ -71,7 +72,9 @@ class PathActivity : ScreenLockActionBarActivity() {
         binding.pathDescription.text = txt
 
         binding.pathRowsContainer.disableClipping()
-        binding.learnMoreButton.setOnClickListener { learnMore() }
+        binding.learnMoreButton.setOnClickListener {
+            openUrl("https://getsession.org/faq/#onion-routing")
+        }
         update(false)
         registerObservers()
 
@@ -199,18 +202,6 @@ class PathActivity : ScreenLockActionBarActivity() {
     }
     // endregion
 
-    // region Interaction
-    private fun learnMore() {
-        try {
-            val url = "https://getsession.org/faq/#onion-routing"
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-            startActivity(intent)
-        } catch (e: Exception) {
-            Toast.makeText(this, R.string.communityEnterUrlErrorInvalid, Toast.LENGTH_SHORT).show()
-        }
-    }
-    // endregion
-
     // region Line View
     private class LineView : RelativeLayout {
         private lateinit var location: Location
@@ -218,10 +209,14 @@ class PathActivity : ScreenLockActionBarActivity() {
         private var dotAnimationRepeatInterval: Long = 0
         private var job: Job? = null
 
+        private val validColor by lazy {
+            ContextCompat.getColor(context, R.color.accent_green)
+        }
+
         private val dotView by lazy {
             val result = PathDotView(context)
             result.setBackgroundResource(R.drawable.accent_dot)
-            result.mainColor = context.getAccentColor()
+            result.mainColor = validColor
             result
         }
 

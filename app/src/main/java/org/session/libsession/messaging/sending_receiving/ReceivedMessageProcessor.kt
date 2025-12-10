@@ -6,7 +6,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import network.loki.messenger.R
-import network.loki.messenger.libsession_util.ConfigBase
+import network.loki.messenger.libsession_util.PRIORITY_HIDDEN
+import network.loki.messenger.libsession_util.protocol.DecodedPro
 import network.loki.messenger.libsession_util.util.BaseCommunityInfo
 import network.loki.messenger.libsession_util.util.BlindKeyAPI
 import network.loki.messenger.libsession_util.util.KeyPair
@@ -39,9 +40,9 @@ import org.session.libsession.utilities.UserConfigType
 import org.session.libsession.utilities.recipients.MessageType
 import org.session.libsession.utilities.recipients.Recipient
 import org.session.libsession.utilities.recipients.getType
-import org.session.libsignal.protos.SignalServiceProtos
 import org.session.libsignal.utilities.AccountId
 import org.session.libsignal.utilities.Log
+import org.session.protos.SessionProtos
 import org.thoughtcrime.securesms.database.BlindMappingRepository
 import org.thoughtcrime.securesms.database.RecipientRepository
 import org.thoughtcrime.securesms.database.Storage
@@ -129,7 +130,8 @@ class ReceivedMessageProcessor @Inject constructor(
         context: MessageProcessingContext,
         threadAddress: Address.Conversable,
         message: Message,
-        proto: SignalServiceProtos.Content,
+        proto: SessionProtos.Content,
+        pro: DecodedPro?,
     ) = withThreadLock(threadAddress) {
         // The logic to check if the message should be discarded due to being from a hidden contact.
         if (threadAddress is Address.Standard &&
@@ -166,7 +168,8 @@ class ReceivedMessageProcessor @Inject constructor(
             is GroupUpdated -> groupMessageHandler.get().handleGroupUpdated(
                 message = message,
                 groupId = (threadAddress as? Address.Group)?.accountId,
-                proto = proto
+                proto = proto,
+                pro = pro,
             )
 
             is ExpirationTimerUpdate -> {
@@ -185,7 +188,7 @@ class ReceivedMessageProcessor @Inject constructor(
             is DataExtractionNotification -> handleDataExtractionNotification(message)
             is UnsendRequest -> handleUnsendRequest(message)
             is MessageRequestResponse -> messageRequestResponseHandler.get()
-                .handleExplicitRequestResponseMessage(context, message, proto)
+                .handleExplicitRequestResponseMessage(context, message, proto, pro)
 
             is VisibleMessage -> {
                 if (message.isSenderSelf &&
@@ -203,6 +206,7 @@ class ReceivedMessageProcessor @Inject constructor(
                     proto = proto,
                     runThreadUpdate = false,
                     runProfileUpdate = true,
+                    pro = pro,
                 )
             }
 
@@ -217,7 +221,7 @@ class ReceivedMessageProcessor @Inject constructor(
         communityServerPubKeyHex: String,
         message: OpenGroupApi.DirectMessage
     ) {
-        val (message, proto) = messageParser.parseCommunityDirectMessage(
+        val parseResult = messageParser.parseCommunityDirectMessage(
             msg = message,
             currentUserId = context.currentUserId,
             currentUserEd25519PrivKey = context.currentUserEd25519KeyPair.secretKey.data,
@@ -225,14 +229,15 @@ class ReceivedMessageProcessor @Inject constructor(
             communityServerPubKeyHex = communityServerPubKeyHex,
         )
 
-        val threadAddress = message.senderOrSync.toAddress() as Address.Conversable
+        val threadAddress = parseResult.message.senderOrSync.toAddress() as Address.Conversable
 
         withThreadLock(threadAddress) {
             processSwarmMessage(
                 context = context,
                 threadAddress = threadAddress,
-                message = message,
-                proto = proto
+                message = parseResult.message,
+                proto = parseResult.proto,
+                pro = parseResult.pro
             )
         }
     }
@@ -243,7 +248,7 @@ class ReceivedMessageProcessor @Inject constructor(
         communityServerPubKeyHex: String,
         msg: OpenGroupApi.DirectMessage
     ) {
-        val (message, proto) = messageParser.parseCommunityDirectMessage(
+        val parseResult = messageParser.parseCommunityDirectMessage(
             msg = msg,
             currentUserId = context.currentUserId,
             currentUserEd25519PrivKey = context.currentUserEd25519KeyPair.secretKey.data,
@@ -260,8 +265,9 @@ class ReceivedMessageProcessor @Inject constructor(
             processSwarmMessage(
                 context = context,
                 threadAddress = threadAddress,
-                message = message,
-                proto = proto
+                message = parseResult.message,
+                proto = parseResult.proto,
+                pro = parseResult.pro
             )
         }
     }
@@ -275,15 +281,16 @@ class ReceivedMessageProcessor @Inject constructor(
             msg = message,
             currentUserId = context.currentUserId,
             currentUserBlindedIDs = context.getCurrentUserBlindedIDsByThread(threadAddress)
-        )?.let { (msg, proto) ->
+        )?.let { parseResult ->
             processSwarmMessage(
                 context = context,
                 threadAddress = threadAddress,
-                message = msg,
-                proto = proto
+                message = parseResult.message,
+                proto = parseResult.proto,
+                pro = parseResult.pro
             )
 
-            msg.id
+            parseResult.message.id
         }
 
         // For community, we have a different way of handling reaction, this is outside of
@@ -303,21 +310,19 @@ class ReceivedMessageProcessor @Inject constructor(
         }
 
         val messageServerId = message.id.toString()
+        val reactions = mutableListOf<ReactionRecord>()
 
         for ((emoji, reaction) in message.reactions.orEmpty()) {
             // We only really want up to 5 reactors per reaction to avoid excessive database load
             // Among the 5 reactors, we must include ourselves if we reacted to this message
             val otherReactorsToAdd = if (reaction.you) {
-                context.addPendingCommunityReaction(
-                    messageId,
-                    ReactionRecord(
-                        messageId = messageId,
-                        author = context.currentUserPublicKey,
-                        emoji = emoji,
-                        serverId = messageServerId,
-                        count = reaction.count,
-                        sortId = 0,
-                    )
+                reactions += ReactionRecord(
+                    messageId = messageId,
+                    author = context.currentUserPublicKey,
+                    emoji = emoji,
+                    serverId = messageServerId,
+                    count = reaction.count,
+                    sortId = 0,
                 )
 
                 val myBlindedIDs = context.getCurrentUserBlindedIDsByThread(threadAddress)
@@ -334,19 +339,18 @@ class ReceivedMessageProcessor @Inject constructor(
 
 
             for (reactor in otherReactorsToAdd) {
-                context.addPendingCommunityReaction(
-                    messageId,
-                    ReactionRecord(
-                        messageId = messageId,
-                        author = reactor,
-                        emoji = emoji,
-                        serverId = messageServerId,
-                        count = reaction.count,
-                        sortId = reaction.index,
-                    )
+                reactions += ReactionRecord(
+                    messageId = messageId,
+                    author = reactor,
+                    emoji = emoji,
+                    serverId = messageServerId,
+                    count = reaction.count,
+                    sortId = reaction.index,
                 )
             }
         }
+
+        context.setCommunityMessageReactions(messageId, reactions)
     }
 
     private fun handleReadReceipt(message: ReadReceipt) {
@@ -493,7 +497,7 @@ class ReceivedMessageProcessor @Inject constructor(
         threadAddress: Address.Standard
     ): Boolean {
         val hidden = configFactory.withUserConfigs { configs ->
-            configs.contacts.get(threadAddress.address)?.priority == ConfigBase.PRIORITY_HIDDEN
+            configs.contacts.get(threadAddress.address)?.priority == PRIORITY_HIDDEN
         }
 
         return hidden &&
@@ -518,7 +522,7 @@ class ReceivedMessageProcessor @Inject constructor(
 
         var maxOutgoingMessageTimestamp: Long = 0L
 
-        val currentUserEd25519KeyPair: KeyPair by lazy(LazyThreadSafetyMode.NONE) {
+        val currentUserEd25519KeyPair: KeyPair by lazy {
             requireNotNull(storage.getUserED25519KeyPair()) {
                 "No current user ED25519 key pair available"
             }
@@ -527,7 +531,7 @@ class ReceivedMessageProcessor @Inject constructor(
         val currentUserPublicKey: String get() = currentUserId.hexString
 
 
-        val contactConfigTimestamp: Long by lazy(LazyThreadSafetyMode.NONE) {
+        val contactConfigTimestamp: Long by lazy {
             configFactory.getConfigTimestamp(UserConfigType.CONTACTS, currentUserPublicKey)
         }
 
@@ -535,7 +539,7 @@ class ReceivedMessageProcessor @Inject constructor(
             null
 
 
-        var pendingCommunityReactions: HashMap<MessageId, MutableList<ReactionRecord>>? = null
+        var pendingCommunityReactions: HashMap<MessageId, List<ReactionRecord>>? = null
             private set
 
 
@@ -590,15 +594,14 @@ class ReceivedMessageProcessor @Inject constructor(
             return getCurrentUserBlindedIDsByServer(address.serverUrl)
         }
 
-        fun addPendingCommunityReaction(messageId: MessageId, reaction: ReactionRecord) {
+
+        fun setCommunityMessageReactions(messageId: MessageId, reactions: List<ReactionRecord>) {
             val reactionsMap = pendingCommunityReactions
-                ?: hashMapOf<MessageId, MutableList<ReactionRecord>>().also {
+                ?: hashMapOf<MessageId, List<ReactionRecord>>().also {
                     pendingCommunityReactions = it
                 }
 
-            reactionsMap.getOrPut(messageId) {
-                mutableListOf()
-            }.add(reaction)
+            reactionsMap[messageId] = reactions
         }
     }
 

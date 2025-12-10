@@ -1,11 +1,11 @@
 package org.session.libsession.messaging.sending_receiving
 
-import network.loki.messenger.libsession_util.ED25519
 import network.loki.messenger.libsession_util.SessionEncrypt
 import network.loki.messenger.libsession_util.pro.ProProof
 import network.loki.messenger.libsession_util.protocol.DecodedEnvelope
-import network.loki.messenger.libsession_util.protocol.ProFeatures
+import network.loki.messenger.libsession_util.protocol.DecodedPro
 import network.loki.messenger.libsession_util.protocol.SessionProtocol
+import network.loki.messenger.libsession_util.util.asSequence
 import org.session.libsession.database.StorageProtocol
 import org.session.libsession.messaging.messages.Message
 import org.session.libsession.messaging.messages.control.CallMessage
@@ -21,15 +21,17 @@ import org.session.libsession.messaging.open_groups.OpenGroupApi
 import org.session.libsession.snode.SnodeClock
 import org.session.libsession.utilities.Address
 import org.session.libsession.utilities.ConfigFactoryProtocol
+import org.session.libsession.utilities.TextSecurePreferences
 import org.session.libsignal.exceptions.NonRetryableException
-import org.session.libsignal.protos.SignalServiceProtos
 import org.session.libsignal.utilities.AccountId
 import org.session.libsignal.utilities.Base64
 import org.session.libsignal.utilities.Hex
 import org.session.libsignal.utilities.IdPrefix
-import java.time.Instant
+import org.session.protos.SessionProtos
+import org.thoughtcrime.securesms.pro.ProBackendConfig
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
+import javax.inject.Provider
 import javax.inject.Singleton
 import kotlin.math.abs
 
@@ -38,10 +40,9 @@ class MessageParser @Inject constructor(
     private val configFactory: ConfigFactoryProtocol,
     private val storage: StorageProtocol,
     private val snodeClock: SnodeClock,
+    private val prefs: TextSecurePreferences,
+    private val proBackendConfig: Provider<ProBackendConfig>,
 ) {
-
-    //TODO: Obtain proBackendKey from somewhere
-    private val proBackendKey = ByteArray(32)
 
     // A faster way to check if the user is blocked than to go through RecipientRepository
     private fun isUserBlocked(accountId: AccountId): Boolean {
@@ -49,8 +50,14 @@ class MessageParser @Inject constructor(
             ?.blocked == true
     }
 
+    class ParseResult(
+        val message: Message,
+        val proto: SessionProtos.Content,
+        val pro: DecodedPro?
+    )
 
-    private fun createMessageFromProto(proto: SignalServiceProtos.Content, isGroupMessage: Boolean): Message {
+
+    private fun createMessageFromProto(proto: SessionProtos.Content, isGroupMessage: Boolean): Message {
         val message = ReadReceipt.fromProto(proto) ?:
         TypingIndicator.fromProto(proto) ?:
         DataExtractionNotification.fromProto(proto) ?:
@@ -76,21 +83,11 @@ class MessageParser @Inject constructor(
         currentUserId: AccountId,
         currentUserBlindedIDs: List<AccountId>,
         senderIdPrefix: IdPrefix
-    ): Pair<Message, SignalServiceProtos.Content> {
-        val proFeatures = if (decodedEnvelope.proProof?.status(
-                senderED25519PubKey = decodedEnvelope.senderEd25519PubKey.data,
-                signedMessage = null,
-                now = decodedEnvelope.timestamp) == ProProof.Status.Valid
-        ) {
-            decodedEnvelope.proFeatures
-        } else {
-            ProFeatures.NONE
-        }
-
+    ): ParseResult {
         return parseMessage(
             sender = AccountId(senderIdPrefix, decodedEnvelope.senderX25519PubKey.data),
             contentPlaintext = decodedEnvelope.contentPlainText.data,
-            proFeatures = proFeatures,
+            pro = decodedEnvelope.decodedPro,
             messageTimestampMs = decodedEnvelope.timestamp.toEpochMilli(),
             relaxSignatureCheck = relaxSignatureCheck,
             checkForBlockStatus = checkForBlockStatus,
@@ -103,19 +100,19 @@ class MessageParser @Inject constructor(
     private fun parseMessage(
         sender: AccountId,
         contentPlaintext: ByteArray,
-        proFeatures: ProFeatures,
+        pro: DecodedPro?,
         messageTimestampMs: Long,
         relaxSignatureCheck: Boolean,
         checkForBlockStatus: Boolean,
         isForGroup: Boolean,
         currentUserId: AccountId,
         currentUserBlindedIDs: List<AccountId>,
-    ): Pair<Message, SignalServiceProtos.Content> {
-        val proto = SignalServiceProtos.Content.parseFrom(contentPlaintext)
+    ): ParseResult {
+        val proto = SessionProtos.Content.parseFrom(contentPlaintext)
 
         // Check signature
-        if (proto.hasSigTimestampMs()) {
-            val diff = abs(proto.sigTimestampMs - messageTimestampMs)
+        if (proto.hasSigTimestamp()) {
+            val diff = abs(proto.sigTimestamp - messageTimestampMs)
             if (
                 (!relaxSignatureCheck && diff != 0L ) ||
                 (relaxSignatureCheck && diff > TimeUnit.HOURS.toMillis(6))) {
@@ -142,7 +139,16 @@ class MessageParser @Inject constructor(
         message.sentTimestamp = messageTimestampMs
         message.receivedTimestamp = snodeClock.currentTimeMills()
         message.isSenderSelf = isSenderSelf
-        (message as? VisibleMessage)?.proFeatures = proFeatures
+
+        // Only process pro features post pro launch
+        if (prefs.forcePostPro()) {
+            if (pro?.status == ProProof.STATUS_VALID) {
+                (message as? VisibleMessage)?.proFeatures = buildSet {
+                    addAll(pro.proMessageFeatures.asSequence())
+                    addAll(pro.proProfileFeatures.asSequence())
+                }
+            }
+        }
 
         // Validate
         var isValid = message.isValid()
@@ -164,7 +170,11 @@ class MessageParser @Inject constructor(
         }
         storage.addReceivedMessageTimestamp(messageTimestampMs)
 
-        return message to proto
+        return ParseResult(
+            message = message,
+            proto = proto,
+            pro = pro
+        )
     }
 
 
@@ -173,12 +183,11 @@ class MessageParser @Inject constructor(
         serverHash: String?,
         currentUserEd25519PrivKey: ByteArray,
         currentUserId: AccountId,
-    ): Pair<Message, SignalServiceProtos.Content> {
+    ): ParseResult {
         val envelop = SessionProtocol.decodeFor1o1(
             myEd25519PrivKey = currentUserEd25519PrivKey,
             payload = data,
-            nowEpochMs = snodeClock.currentTimeMills(),
-            proBackendPubKey = proBackendKey,
+            proBackendPubKey = proBackendConfig.get().ed25519PubKey,
         )
 
         return parseMessage(
@@ -189,8 +198,8 @@ class MessageParser @Inject constructor(
             senderIdPrefix = IdPrefix.STANDARD,
             currentUserId = currentUserId,
             currentUserBlindedIDs = emptyList(),
-        ).also { (message, _) ->
-            message.serverHash = serverHash
+        ).also { result ->
+            result.message.serverHash = serverHash
         }
     }
 
@@ -200,7 +209,7 @@ class MessageParser @Inject constructor(
         groupId: AccountId,
         currentUserEd25519PrivKey: ByteArray,
         currentUserId: AccountId,
-    ): Pair<Message, SignalServiceProtos.Content> {
+    ): ParseResult {
         val keys = configFactory.withGroupConfigs(groupId) {
             it.groupKeys.groupKeys()
         }
@@ -208,10 +217,9 @@ class MessageParser @Inject constructor(
         val decoded = SessionProtocol.decodeForGroup(
             payload = data,
             myEd25519PrivKey = currentUserEd25519PrivKey,
-            nowEpochMs = snodeClock.currentTimeMills(),
             groupEd25519PublicKey = groupId.pubKeyBytes,
             groupEd25519PrivateKeys = keys.toTypedArray(),
-            proBackendPubKey = proBackendKey
+            proBackendPubKey = proBackendConfig.get().ed25519PubKey,
         )
 
         return parseMessage(
@@ -222,8 +230,8 @@ class MessageParser @Inject constructor(
             senderIdPrefix = IdPrefix.STANDARD,
             currentUserId = currentUserId,
             currentUserBlindedIDs = emptyList(),
-        ).also { (message, _) ->
-            message.serverHash = serverHash
+        ).also { result ->
+            result.message.serverHash = serverHash
         }
     }
 
@@ -231,32 +239,22 @@ class MessageParser @Inject constructor(
         msg: OpenGroupApi.Message,
         currentUserId: AccountId,
         currentUserBlindedIDs: List<AccountId>,
-    ): Pair<Message, SignalServiceProtos.Content>? {
+    ): ParseResult? {
         if (msg.data.isNullOrBlank()) {
             return null
         }
 
         val decoded = SessionProtocol.decodeForCommunity(
             payload = Base64.decode(msg.data),
-            nowEpochMs = snodeClock.currentTimeMills(),
-            proBackendPubKey = proBackendKey,
+            timestampMs = (msg.posted * 1000).toLong(),
+            proBackendPubKey = proBackendConfig.get().ed25519PubKey,
         )
 
         val sender = AccountId(msg.sessionId)
 
-        val proFeatures = if (decoded.proProof?.status(
-                senderED25519PubKey = sender.pubKeyBytes,
-                signedMessage = null,
-                now = Instant.ofEpochMilli((msg.posted * 1000.0).toLong())) == ProProof.Status.Valid
-        ) {
-            decoded.proFeatures
-        } else {
-            ProFeatures.NONE
-        }
-
         return parseMessage(
             contentPlaintext = decoded.contentPlainText.data,
-            proFeatures = proFeatures,
+            pro = decoded.decodedPro,
             relaxSignatureCheck = true,
             checkForBlockStatus = false,
             isForGroup = false,
@@ -264,8 +262,8 @@ class MessageParser @Inject constructor(
             sender = sender,
             messageTimestampMs = (msg.posted * 1000).toLong(),
             currentUserBlindedIDs = currentUserBlindedIDs,
-        ).also { (message, _) ->
-            message.openGroupServerMessageID = msg.id
+        ).also { result ->
+            result.message.openGroupServerMessageID = msg.id
         }
     }
 
@@ -275,7 +273,7 @@ class MessageParser @Inject constructor(
         currentUserEd25519PrivKey: ByteArray,
         currentUserId: AccountId,
         currentUserBlindedIDs: List<AccountId>,
-    ): Pair<Message, SignalServiceProtos.Content> {
+    ): ParseResult {
         val (senderId, plaintext) = SessionEncrypt.decryptForBlindedRecipient(
             ciphertext = Base64.decode(msg.message),
             myEd25519Privkey = currentUserEd25519PrivKey,
@@ -286,32 +284,15 @@ class MessageParser @Inject constructor(
 
         val decoded = SessionProtocol.decodeForCommunity(
             payload = plaintext.data,
-            nowEpochMs = snodeClock.currentTimeMills(),
-            proBackendPubKey = proBackendKey,
+            timestampMs = msg.postedAt * 1000L,
+            proBackendPubKey = proBackendConfig.get().ed25519PubKey,
         )
 
         val sender = Address.Standard(AccountId(senderId))
-        val messageSent = Instant.ofEpochMilli((msg.postedAt * 1000.0).toLong())
-
-        val proProof = decoded.proProof
-        val proFeatures = if (proProof != null) {
-            val hasValidProof = ED25519.ed25519PubKeysFromCurve25519(sender.accountId.pubKeyBytes)
-                .any { senderEd25519PubKey ->
-                    proProof.status(senderEd25519PubKey, now = messageSent) == ProProof.Status.Valid
-                }
-
-            if (hasValidProof) {
-                decoded.proFeatures
-            } else {
-                ProFeatures.NONE
-            }
-        } else {
-            ProFeatures.NONE
-        }
 
         return parseMessage(
             contentPlaintext = decoded.contentPlainText.data,
-            proFeatures = proFeatures,
+            pro = decoded.decodedPro,
             relaxSignatureCheck = true,
             checkForBlockStatus = false,
             isForGroup = false,

@@ -209,7 +209,7 @@ class VisibleMessageView : FrameLayout {
                     Avatar(
                         size = LocalDimensions.current.iconMediumAvatar,
                         data = avatarUtils.getUIDataFromRecipient(sender),
-                        badge = if(showProBadge) AvatarBadge.Admin else AvatarBadge.None,
+                        badge = if(showProBadge) AvatarBadge.ResourceBadge.Admin else AvatarBadge.None,
                         modifier = Modifier.clickable {
                             delegate?.showUserProfileModal(message.recipient)
                         }
@@ -275,7 +275,13 @@ class VisibleMessageView : FrameLayout {
             val capabilities = (threadRecipient.address as? Address.Community)?.serverUrl?.let { lokiApiDb.getServerCapabilities(it) }
             if (capabilities.isNullOrEmpty() || capabilities.contains(OpenGroupApi.Capability.REACTIONS.name.lowercase())) {
                 emojiReactionsBinding.value.root.let { root ->
-                    root.setReactions(message.messageId, message.reactions, message.isOutgoing, delegate)
+                    root.setReactions(
+                        messageId = message.messageId,
+                        threadRecipient = threadRecipient,
+                        records = message.reactions,
+                        outgoing = message.isOutgoing,
+                        delegate = delegate
+                    )
                     root.layoutParams = (root.layoutParams as ConstraintLayout.LayoutParams).apply {
                         horizontalBias = if (message.isOutgoing) 1f else 0f
                     }

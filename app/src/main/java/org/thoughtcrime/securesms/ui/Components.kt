@@ -4,8 +4,6 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -36,14 +34,12 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -79,6 +75,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -86,6 +83,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
@@ -103,8 +102,13 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
@@ -425,15 +429,7 @@ fun Cell(
         modifier = modifier
             .then(
                 if (dropShadow)
-                    Modifier.dropShadow(
-                        shape = MaterialTheme.shapes.small,
-                        shadow = Shadow(
-                            radius = 4.dp,
-                            color = LocalColors.current.text,
-                            alpha = 0.25f,
-                            offset = DpOffset(0.dp, 4.dp)
-                        )
-                    )
+                    Modifier.sessionDropShadow()
                 else Modifier
             )
             .clip(MaterialTheme.shapes.small)
@@ -772,6 +768,75 @@ fun SearchBar(
 }
 
 /**
+ * Search with the close action for removing focus
+ */
+
+@Composable
+fun SearchBarWithClose(
+    query: String,
+    onValueChanged: (String) -> Unit,
+    onClear: () -> Unit,
+    isFocused: Boolean,
+    onFocusChanged: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String? = null,
+    enabled: Boolean = true,
+    backgroundColor: Color = LocalColors.current.backgroundSecondary,
+) {
+
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focusRequester = remember { FocusRequester() }
+
+    // When the parent toggles isFocused, request or clear focus accordingly
+    LaunchedEffect(isFocused) {
+        if (isFocused) {
+            focusRequester.requestFocus()
+            keyboard?.show()
+        } else {
+            focusManager.clearFocus(force = true)
+            keyboard?.hide()
+        }
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(LocalDimensions.current.smallSpacing)
+
+    ) {
+        SearchBar(
+            query = query,
+            onValueChanged = onValueChanged,
+            onClear = onClear,
+            placeholder = placeholder,
+            enabled = enabled,
+            backgroundColor = backgroundColor,
+            modifier = Modifier
+                .weight(1f)
+                .background(backgroundColor, MaterialTheme.shapes.small)
+                .onFocusChanged { onFocusChanged(it.isFocused) }
+        )
+
+        // Right-side Cancel (outside the search field)
+        AnimatedVisibility(visible = isFocused) {
+            Text(
+                text = LocalResources.current.getString(R.string.close),
+                style = LocalType.current.base,
+                color = LocalColors.current.text,
+                modifier = Modifier
+                    .clickable {
+                        focusManager.clearFocus(force = true)
+                    }
+                    .padding(
+                        vertical = LocalDimensions.current.xxsSpacing
+                    )
+            )
+        }
+    }
+}
+
+/**
  * CollapsibleFooterAction
  */
 @Composable
@@ -899,20 +964,20 @@ private fun CollapsibleFooterActions(
         val capDp = with(density) { capPx.toDp() }
 
         val single = items.size == 1
-        val measuredMaxButtonWidthPx = remember(items, capPx) { mutableIntStateOf(1) }
+        var equalWidthPx by rememberSaveable(capPx) { mutableIntStateOf(-1) }
 
         // Only do the offscreen equal width computation when we have 2+ buttons.
         if (!single) {
             SubcomposeLayout { parentConstraints ->
                 val measurables = subcompose("measureButtons") {
                     items.forEach { item ->
-                        SlimFillButtonRect(item.buttonLabel.string(), color = item.buttonColor) {}
+                        SlimFillButtonRect(item.buttonLabel.string(), color = LocalColors.current.accent) {}
                     }
                 }
                 val placeables = measurables.map { m ->
                     m.measure(
                         Constraints(
-                            minWidth = 1,
+                            minWidth = 0,
                             maxWidth = capPx,
                             minHeight = 0,
                             maxHeight = parentConstraints.maxHeight
@@ -920,12 +985,11 @@ private fun CollapsibleFooterActions(
                     )
                 }
                 val natural = placeables.maxOfOrNull { it.width } ?: 1
-                measuredMaxButtonWidthPx.intValue = natural.coerceIn(1, capPx)
+                equalWidthPx = natural.coerceIn(0, capPx)
+
                 layout(0, 0) {}
             }
         }
-
-        val equalWidthDp = with(density) { measuredMaxButtonWidthPx.intValue.toDp() }
 
         Column(
             modifier = Modifier
@@ -939,24 +1003,41 @@ private fun CollapsibleFooterActions(
                 val annotatedTitle = remember(titleText) { AnnotatedString(titleText) }
 
                 ActionRowItem(
-                    modifier = Modifier.background(LocalColors.current.backgroundTertiary),
+                    modifier = Modifier.background(LocalColors.current.backgroundTertiary)
+                        .semantics(mergeDescendants = true){},
                     title = annotatedTitle,
-                    onClick = {},
+                    onClick = {
+                        item.onClick()
+                    },
                     qaTag = R.string.qa_collapsing_footer_action,
                     endContent = {
+                        val widthMod =
+                            if (single) {
+                                Modifier
+                                    .wrapContentWidth()
+                                    .widthIn(max = capDp)
+                            } else if (equalWidthPx >= 0) {
+                                Modifier.width(with(density) { equalWidthPx.toDp() })
+                            } else {
+                                Modifier
+                                    .wrapContentWidth()
+                                    .widthIn(max = capDp)
+                            }
                         Box(
                             modifier = Modifier
                                 .padding(start = LocalDimensions.current.smallSpacing)
-                                .then(
-                                    if (single) Modifier.wrapContentWidth().widthIn(max = capDp)
-                                    else Modifier.width(equalWidthDp)
-                                )
+                                .then(widthMod)
                         ) {
+                            val buttonModifier = if (single) Modifier else Modifier.fillMaxWidth()
                             SlimFillButtonRect(
-                                modifier = if (single) Modifier else Modifier.fillMaxWidth(),
+                                modifier = buttonModifier
+                                    .qaTag(stringResource(R.string.qa_collapsing_footer_action)+"_"+item.buttonLabel.string().lowercase())
+                                    .clearAndSetSemantics{},
                                 text = item.buttonLabel.string(),
-                                color = item.buttonColor
-                            ) { item.onClick() }
+                                color = if(item.isDanger) LocalColors.current.danger else LocalColors.current.accent
+                            ) {
+                                item.onClick()
+                            }
                         }
                     }
                 )
@@ -975,7 +1056,7 @@ data class CollapsibleFooterActionData(
 data class CollapsibleFooterItemData(
     val label: GetString,
     val buttonLabel: GetString,
-    val buttonColor: Color,
+    val isDanger: Boolean,
     val onClick: () -> Unit
 )
 
@@ -990,13 +1071,13 @@ fun PreviewCollapsibleActionTray(
             CollapsibleFooterItemData(
                 label = GetString("Invite "),
                 buttonLabel = GetString("Invite"),
-                buttonColor = LocalColors.current.accent,
+                isDanger = false,
                 onClick = {}
             ),
             CollapsibleFooterItemData(
                 label = GetString("Delete"),
                 buttonLabel = GetString("2"),
-                buttonColor = LocalColors.current.danger,
+                isDanger = true,
                 onClick = {}
             )
         )
@@ -1022,13 +1103,13 @@ fun PreviewCollapsibleActionTrayLongText(
             CollapsibleFooterItemData(
                 label = GetString("Looooooooooooooooooooooooooooooooooooooooooooooooooooooooong"),
                 buttonLabel = GetString("Long Looooooooooooooooooooong"),
-                buttonColor = LocalColors.current.accent,
+                isDanger = false,
                 onClick = {}
             ),
             CollapsibleFooterItemData(
                 label = GetString("Delete"),
                 buttonLabel = GetString("Delete"),
-                buttonColor = LocalColors.current.danger,
+                isDanger = true,
                 onClick = {}
             )
         )
@@ -1325,6 +1406,7 @@ fun ActionRowItem(
     onClick: () -> Unit,
     @StringRes qaTag: Int,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     subtitle: AnnotatedString? = null,
     titleColor: Color = LocalColors.current.text,
     subtitleColor: Color = LocalColors.current.text,
@@ -1337,7 +1419,9 @@ fun ActionRowItem(
     Row(
         modifier = modifier
             .heightIn(min = minHeight)
-            .clickable { onClick() }
+            .then(
+                if (enabled) Modifier.clickable { onClick() } else Modifier
+            )
             .padding(paddingValues)
             .qaTag(qaTag),
         verticalAlignment = Alignment.CenterVertically
@@ -1492,5 +1576,24 @@ fun PreviewActionRowItems() {
                 qaTag = 0
             )
         }
+    }
+}
+
+
+@Preview
+@Composable
+fun PreviewSearchWithCancel(
+    @PreviewParameter(SessionColorsParameterProvider::class) colors: ThemeColors
+) {
+    PreviewTheme(colors) {
+        SearchBarWithClose(
+            query = "Test Query",
+            onValueChanged = {  },
+            onClear = {  },
+            placeholder = "Search",
+            enabled = true,
+            isFocused = true,
+            onFocusChanged = {}
+        )
     }
 }

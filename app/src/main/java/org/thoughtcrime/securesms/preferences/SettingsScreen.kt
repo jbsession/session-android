@@ -66,6 +66,7 @@ import com.bumptech.glide.integration.compose.GlideImage
 import com.squareup.phrase.Phrase
 import network.loki.messenger.BuildConfig
 import network.loki.messenger.R
+import org.session.libsession.snode.OnionRequestAPI
 import org.session.libsession.utilities.NonTranslatableStringConstants
 import org.session.libsession.utilities.NonTranslatableStringConstants.NETWORK_NAME
 import org.session.libsession.utilities.StringSubstitutionConstants.APP_NAME_KEY
@@ -85,6 +86,8 @@ import org.thoughtcrime.securesms.preferences.SettingsViewModel.Commands.HideUrl
 import org.thoughtcrime.securesms.preferences.SettingsViewModel.Commands.HideUsernameDialog
 import org.thoughtcrime.securesms.preferences.SettingsViewModel.Commands.OnAvatarDialogDismissed
 import org.thoughtcrime.securesms.preferences.SettingsViewModel.Commands.OnDonateClicked
+import org.thoughtcrime.securesms.preferences.SettingsViewModel.Commands.OnLinkCopied
+import org.thoughtcrime.securesms.preferences.SettingsViewModel.Commands.OnLinkOpened
 import org.thoughtcrime.securesms.preferences.SettingsViewModel.Commands.RemoveAvatar
 import org.thoughtcrime.securesms.preferences.SettingsViewModel.Commands.SaveAvatar
 import org.thoughtcrime.securesms.preferences.SettingsViewModel.Commands.SetUsername
@@ -143,7 +146,6 @@ import org.thoughtcrime.securesms.ui.theme.dangerButtonColors
 import org.thoughtcrime.securesms.ui.theme.monospace
 import org.thoughtcrime.securesms.ui.theme.primaryBlue
 import org.thoughtcrime.securesms.ui.theme.primaryGreen
-import org.thoughtcrime.securesms.ui.theme.primaryYellow
 import org.thoughtcrime.securesms.util.AvatarUIData
 import org.thoughtcrime.securesms.util.AvatarUIElement
 import org.thoughtcrime.securesms.util.State
@@ -315,7 +317,7 @@ fun Settings(
             // Buttons
             Buttons(
                 recoveryHidden = uiState.recoveryHidden,
-                hasPaths = uiState.hasPath,
+                pathStatus = uiState.pathStatus,
                 postPro = uiState.isPostPro,
                 proDataState = uiState.proDataState,
                 sendCommand = sendCommand
@@ -418,6 +420,8 @@ fun Settings(
         if(uiState.showUrlDialog != null){
             OpenURLAlertDialog(
                 url = uiState.showUrlDialog,
+                onLinkOpened = { sendCommand(OnLinkOpened(uiState.showUrlDialog)) },
+                onLinkCopied = { sendCommand(OnLinkCopied(uiState.showUrlDialog)) },
                 onDismissRequest = { sendCommand(HideUrlDialog) }
             )
         }
@@ -494,7 +498,7 @@ fun Settings(
 @Composable
 fun Buttons(
     recoveryHidden: Boolean,
-    hasPaths: Boolean,
+    pathStatus: OnionRequestAPI.PathStatus,
     postPro: Boolean,
     proDataState: ProDataState,
     sendCommand: (SettingsViewModel.Commands) -> Unit,
@@ -605,7 +609,11 @@ fun Buttons(
                 }
                 Divider()
 
-                Crossfade(if (hasPaths) primaryGreen else primaryYellow, label = "path") {
+                Crossfade(when (pathStatus){
+                        OnionRequestAPI.PathStatus.BUILDING -> LocalColors.current.warning
+                        OnionRequestAPI.PathStatus.ERROR -> LocalColors.current.danger
+                        else -> primaryGreen
+                    }, label = "path") {
                     ItemButton(
                         modifier = Modifier.qaTag(R.string.qa_settings_item_path),
                         text = annotatedStringResource(R.string.onionRoutingPath),
@@ -1026,7 +1034,9 @@ fun AnimatedProCTA(
 
                 // main message
                 Text(
-                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                    modifier = Modifier
+                        .qaTag(R.string.qa_cta_body)
+                        .align(Alignment.CenterHorizontally),
                     text = stringResource(R.string.proAnimatedDisplayPicture),
                     textAlign = TextAlign.Center,
                     style = LocalType.current.base.copy(
@@ -1084,7 +1094,7 @@ private fun SettingsScreenPreview() {
                 ),
                 username = "Atreyu",
                 accountID = "053d30141d0d35d9c4b30a8f8880f8464e221ee71a8aff9f0dcefb1e60145cea5144",
-                hasPath = true,
+                pathStatus = OnionRequestAPI.PathStatus.READY,
                 version = "1.26.0",
             ),
             sendCommand = {},

@@ -80,6 +80,8 @@ fun ConversationSettingsDialogs(
             buttons.add(
                 DialogButtonData(
                     text = GetString(dialogsState.showSimpleDialog.negativeText),
+                    color = if (dialogsState.showSimpleDialog.negativeStyleDanger) LocalColors.current.danger
+                    else LocalColors.current.text,
                     qaTag = dialogsState.showSimpleDialog.negativeQaTag,
                     onClick = dialogsState.showSimpleDialog.onNegative
                 )
@@ -263,6 +265,7 @@ fun ConversationSettingsDialogs(
                         iconRes = R.drawable.ic_pro_badge,
                         iconSize = 40.sp to 18.sp,
                         style = LocalType.current.large,
+                        textQaTag = stringResource(R.string.qa_cta_body)
                     )
                 },
                 content = { CTAImage(heroImage = R.drawable.cta_hero_group) },
