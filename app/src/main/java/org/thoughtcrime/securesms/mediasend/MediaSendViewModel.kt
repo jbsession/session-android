@@ -32,7 +32,7 @@ import javax.inject.Inject
  * Manages the observable datasets available in [MediaSendActivity].
  */
 @HiltViewModel
-internal class MediaSendViewModel @Inject constructor(
+class MediaSendViewModel @Inject constructor(
     private val application: Application,
     proStatusManager: ProStatusManager,
     recipientRepository: RecipientRepository,
@@ -95,14 +95,18 @@ internal class MediaSendViewModel @Inject constructor(
         repository.getPopulatedMedia(context, newMedia) { populatedMedia: List<Media> ->
             runOnMain {
                 // Use the new filter function that returns valid items AND errors
-                var (filteredMedia, errors) = getFilteredMedia(context, populatedMedia, mediaConstraints)
+                var (filteredMedia, errors) = getFilteredMedia(
+                    context,
+                    populatedMedia,
+                    mediaConstraints
+                )
 
                 // Report errors if they occurred
                 if (errors.contains(Error.ITEM_TOO_LARGE)) {
                     _effects.tryEmit(MediaSendEffect.ShowError(Error.ITEM_TOO_LARGE))
                 } else if (errors.contains(Error.INVALID_TYPE_ONLY)) {
                     _effects.tryEmit(MediaSendEffect.ShowError(Error.INVALID_TYPE_ONLY))
-                }else if (errors.contains(Error.MIXED_TYPE)) {
+                } else if (errors.contains(Error.MIXED_TYPE)) {
                     _effects.tryEmit(MediaSendEffect.ShowError(Error.MIXED_TYPE))
                 }
 
@@ -146,14 +150,18 @@ internal class MediaSendViewModel @Inject constructor(
     fun onSingleMediaSelected(context: Context, media: Media) {
         repository.getPopulatedMedia(context, listOf(media)) { populatedMedia: List<Media> ->
             runOnMain {
-                val (filteredMedia, errors) = getFilteredMedia(context, populatedMedia, mediaConstraints)
+                val (filteredMedia, errors) = getFilteredMedia(
+                    context,
+                    populatedMedia,
+                    mediaConstraints
+                )
 
                 if (filteredMedia.isEmpty()) {
                     if (errors.contains(Error.ITEM_TOO_LARGE)) {
                         _effects.tryEmit(MediaSendEffect.ShowError(Error.ITEM_TOO_LARGE))
                     } else if (errors.contains(Error.INVALID_TYPE_ONLY)) {
                         _effects.tryEmit(MediaSendEffect.ShowError(Error.INVALID_TYPE_ONLY))
-                    }else if (errors.contains(Error.MIXED_TYPE)) {
+                    } else if (errors.contains(Error.MIXED_TYPE)) {
                         _effects.tryEmit(MediaSendEffect.ShowError(Error.MIXED_TYPE))
                     }
                 }
@@ -223,7 +231,8 @@ internal class MediaSendViewModel @Inject constructor(
 
     fun onPageChanged(position: Int) {
         if (position !in selectedMedia.indices) {
-            Log.w(TAG,
+            Log.w(
+                TAG,
                 "Tried to move to an out-of-bounds item. Size: " + selectedMedia.size + ", position: " + position
             )
             return
@@ -378,7 +387,7 @@ internal class MediaSendViewModel @Inject constructor(
         }
 
         // if there are no valid types at all, return early
-        if(validMultiMediaCount == 0){
+        if (validMultiMediaCount == 0) {
             errors.add(Error.INVALID_TYPE_ONLY)
             return Pair(validMedia, errors)
         }
@@ -427,11 +436,11 @@ internal class MediaSendViewModel @Inject constructor(
         }
     }
 
-    internal enum class Error {
+    enum class Error {
         ITEM_TOO_LARGE, TOO_MANY_ITEMS, INVALID_TYPE_ONLY, MIXED_TYPE
     }
 
-    internal class CountButtonState(val count: Int, private val visibility: Visibility) {
+    class CountButtonState(val count: Int, private val visibility: Visibility) {
         val isVisible: Boolean
             get() {
                 return when (visibility) {
@@ -441,7 +450,7 @@ internal class MediaSendViewModel @Inject constructor(
                 }
             }
 
-        internal enum class Visibility {
+        enum class Visibility {
             CONDITIONAL, FORCED_ON, FORCED_OFF
         }
     }
@@ -457,12 +466,13 @@ internal class MediaSendViewModel @Inject constructor(
         val showCameraButton: Boolean = false
     ) {
         val count: Int get() = selectedMedia.size
-        val showCountButton: Boolean get() =
-            when (countVisibility) {
-                CountButtonState.Visibility.FORCED_ON -> true
-                CountButtonState.Visibility.FORCED_OFF -> false
-                CountButtonState.Visibility.CONDITIONAL -> count > 0
-            }
+        val showCountButton: Boolean
+            get() =
+                when (countVisibility) {
+                    CountButtonState.Visibility.FORCED_ON -> true
+                    CountButtonState.Visibility.FORCED_OFF -> false
+                    CountButtonState.Visibility.CONDITIONAL -> count > 0
+                }
     }
 
     sealed interface MediaSendEffect {
