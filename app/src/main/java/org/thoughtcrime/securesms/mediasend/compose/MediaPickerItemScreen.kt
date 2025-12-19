@@ -1,5 +1,6 @@
 package org.thoughtcrime.securesms.mediasend.compose
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -20,6 +21,7 @@ import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContentProviderCompat.requireContext
 import androidx.core.net.toUri
 import network.loki.messenger.R
 import org.session.libsession.utilities.MediaTypes
@@ -82,6 +84,7 @@ private fun MediaPickerItem(
     forcedMultiSelect: Boolean = false
 ) {
 
+    val context = LocalContext.current.applicationContext
     // spanCount = screenWidth / itemWidth (same as fragment)
     val itemWidth = dimensionResource(R.dimen.media_picker_item_width)
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
@@ -126,7 +129,13 @@ private fun MediaPickerItem(
                     onMediaChosen = { onSinglePick(it) },
                     onSelectionStarted = onStartMultiSelect,
                     onSelectionChanged = onToggleSelection,
-                    onSelectionOverflow = { /* show toast */ }
+                    onSelectionOverflow = {
+                        Toast.makeText(
+                            context,
+                            R.string.attachmentsErrorNumber,
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 )
             }
         }
