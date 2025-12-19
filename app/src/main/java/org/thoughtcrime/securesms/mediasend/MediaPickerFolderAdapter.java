@@ -19,6 +19,7 @@ import com.bumptech.glide.RequestManager;
 import java.util.ArrayList;
 import java.util.List;
 
+@Deprecated
 class MediaPickerFolderAdapter extends RecyclerView.Adapter<MediaPickerFolderAdapter.FolderViewHolder> {
 
   private final RequestManager glideRequests;

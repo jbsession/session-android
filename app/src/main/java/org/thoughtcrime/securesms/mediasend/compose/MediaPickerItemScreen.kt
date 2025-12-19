@@ -1,7 +1,5 @@
 package org.thoughtcrime.securesms.mediasend.compose
 
-import android.net.Uri
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -15,10 +13,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -26,15 +20,14 @@ import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import org.thoughtcrime.securesms.mediasend.Media
-import org.thoughtcrime.securesms.mediasend.MediaSendViewModel
+import androidx.core.net.toUri
 import network.loki.messenger.R
 import org.session.libsession.utilities.MediaTypes
+import org.thoughtcrime.securesms.mediasend.Media
 import org.thoughtcrime.securesms.mediasend.Media.Companion.ALL_MEDIA_BUCKET_ID
+import org.thoughtcrime.securesms.mediasend.MediaSendViewModel
 import org.thoughtcrime.securesms.ui.components.BackAppBar
 import org.thoughtcrime.securesms.ui.theme.LocalColors
-import androidx.core.net.toUri
 
 @Composable
 fun MediaPickerItemScreen(
@@ -48,27 +41,9 @@ fun MediaPickerItemScreen(
     val uiState = viewModel.uiState.collectAsState().value
     val context = LocalContext.current
 
-
     LaunchedEffect(bucketId) {
         viewModel.getMediaInBucket(bucketId) // triggers repository + updates uiState.bucketMedia
         viewModel.onItemPickerStarted()
-    }
-
-    LaunchedEffect(Unit) {
-        viewModel.effects.collect { eff ->
-            when (eff) {
-                is MediaSendViewModel.MediaSendEffect.ShowError -> {
-                    Toast.makeText(context, R.string.attachmentsErrorNumber, Toast.LENGTH_SHORT)
-                        .show()
-                }
-
-                is MediaSendViewModel.MediaSendEffect.Toast ->
-                    Toast.makeText(context, eff.messageRes, Toast.LENGTH_SHORT).show()
-
-                is MediaSendViewModel.MediaSendEffect.ToastText ->
-                    Toast.makeText(context, eff.message, Toast.LENGTH_SHORT).show()
-            }
-        }
     }
 
     MediaPickerItem(
@@ -78,14 +53,16 @@ fun MediaPickerItemScreen(
         maxSelection = maxSelection,
         showMultiSelectAction = !uiState.showCountButton,
         onBack = onBack,
-        onStartMultiSelect = { viewModel.onMultiSelectStarted() },
+        onStartMultiSelect = {
+            viewModel.onMultiSelectStarted()
+        },
         onToggleSelection = { nextSelected ->
-            viewModel.onSelectedMediaChanged(nextSelected.map { it }) // List<Media?>
+            viewModel.onSelectedMediaChanged(nextSelected) // List<Media?>
         },
         onSinglePick = { media ->
-            viewModel.onSingleMediaSelected(context, media)
             onMediaSelected(media)
-        }
+        },
+        forcedMultiSelect = uiState.forcedMultiSelect
     )
 
 }
@@ -102,6 +79,7 @@ private fun MediaPickerItem(
     onStartMultiSelect: () -> Unit,
     onToggleSelection: (List<Media>) -> Unit,
     onSinglePick: (Media) -> Unit,
+    forcedMultiSelect: Boolean = false
 ) {
 
     // spanCount = screenWidth / itemWidth (same as fragment)
@@ -109,9 +87,8 @@ private fun MediaPickerItem(
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
     val columns = maxOf(1, (screenWidth / itemWidth).toInt())
 
-    var multiSelectMode by rememberSaveable { mutableStateOf(false) }
-
     Scaffold(
+        modifier = Modifier.background(LocalColors.current.background),
         topBar = {
             BackAppBar(
                 title = title,
@@ -120,12 +97,11 @@ private fun MediaPickerItem(
                     if (showMultiSelectAction) {
                         IconButton(
                             onClick = {
-                                multiSelectMode = true
                                 onStartMultiSelect()
                             }
                         ) {
                             Icon(
-                                painter = painterResource(id = R.drawable.ic_plus),
+                                painter = painterResource(id = R.drawable.ic_images),
                                 contentDescription = null
                             )
                         }
@@ -145,11 +121,11 @@ private fun MediaPickerItem(
                 MediaPickerItemCell(
                     media = item,
                     selected = selected,
-                    forcedMultiSelect = multiSelectMode, // your remembered state / VM flag
+                    forcedMultiSelect = forcedMultiSelect,
                     maxSelection = maxSelection,
                     onMediaChosen = { onSinglePick(it) },
                     onSelectionStarted = onStartMultiSelect,
-                    onSelectionChanged = { onToggleSelection(it.map { m -> m }) },
+                    onSelectionChanged = onToggleSelection,
                     onSelectionOverflow = { /* show toast */ }
                 )
             }

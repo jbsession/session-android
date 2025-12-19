@@ -140,7 +140,8 @@ class MediaSendViewModel @Inject constructor(
                     it.copy(
                         selectedMedia = filteredMedia,
                         bucketId = computedId,
-                        countVisibility = newVisibility
+                        countVisibility = newVisibility,
+                        forcedMultiSelect = it.forcedMultiSelect && filteredMedia.isNotEmpty()
                     )
                 }
             }
@@ -174,7 +175,8 @@ class MediaSendViewModel @Inject constructor(
                     it.copy(
                         selectedMedia = filteredMedia,
                         bucketId = newBucketId,
-                        countVisibility = CountButtonState.Visibility.FORCED_OFF
+                        countVisibility = CountButtonState.Visibility.FORCED_OFF,
+                        forcedMultiSelect = false
                     )
                 }
             }
@@ -182,14 +184,18 @@ class MediaSendViewModel @Inject constructor(
     }
 
     fun onMultiSelectStarted() {
-        _uiState.update { it.copy(countVisibility = CountButtonState.Visibility.FORCED_ON) }
+        _uiState.update { it.copy(
+            countVisibility = CountButtonState.Visibility.FORCED_ON,
+            forcedMultiSelect = true
+        ) }
     }
 
     fun onImageEditorStarted() {
         _uiState.update {
             it.copy(
                 countVisibility = CountButtonState.Visibility.FORCED_OFF,
-                showCameraButton = false
+                showCameraButton = false,
+                forcedMultiSelect = false
             )
         }
     }
@@ -207,7 +213,8 @@ class MediaSendViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 countVisibility = CountButtonState.Visibility.CONDITIONAL,
-                showCameraButton = true
+                showCameraButton = true,
+                forcedMultiSelect = false
             )
         }
     }
@@ -363,6 +370,12 @@ class MediaSendViewModel @Inject constructor(
     private val selectedMedia: List<Media>
         get() = _uiState.value.selectedMedia
 
+    // Same as getFolders but does not return LiveData
+    fun refreshFolders() {
+        repository.getFolders(context) { value ->
+            _uiState.update { it.copy(folders = value) }
+        }
+    }
 
     /**
      * Filters the input list of media.
@@ -463,7 +476,8 @@ class MediaSendViewModel @Inject constructor(
         val selectedMedia: List<Media> = emptyList(),
         val position: Int = -1,
         val countVisibility: CountButtonState.Visibility = CountButtonState.Visibility.FORCED_OFF,
-        val showCameraButton: Boolean = false
+        val showCameraButton: Boolean = false,
+        val forcedMultiSelect: Boolean = false, // previously in the adapter but put this here for now
     ) {
         val count: Int get() = selectedMedia.size
         val showCountButton: Boolean

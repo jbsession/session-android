@@ -41,6 +41,7 @@ import network.loki.messenger.R;
 /**
  * Allows the user to select a media folder to explore.
  */
+@Deprecated
 @AndroidEntryPoint
 public class MediaPickerFolderFragment extends Fragment implements MediaPickerFolderAdapter.EventListener {
 
@@ -191,6 +192,7 @@ public class MediaPickerFolderFragment extends Fragment implements MediaPickerFo
     controller.onFolderSelected(folder);
   }
 
+  @Deprecated
   public interface Controller {
     void onFolderSelected(@NonNull MediaFolder folder);
   }

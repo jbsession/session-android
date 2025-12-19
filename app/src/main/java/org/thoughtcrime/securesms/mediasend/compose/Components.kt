@@ -196,7 +196,7 @@ fun MediaPickerItemCell(
         Box(
             Modifier
                 .matchParentSize()
-                .border(width = 1.dp, color = Color(0x33000000))
+                .border(width = 1.dp, color = Color.White.copy(alpha = 0.20f))
         )
 
         // Play overlay (center) for video
@@ -215,17 +215,17 @@ fun MediaPickerItemCell(
                     modifier = Modifier
                         .size(width = 15.dp, height = 18.dp)
                         .padding(start = 2.dp),
-                    colorFilter = ColorFilter.tint(Color(0xFF2A7BFF)) // match your @color/core_blue-ish
+                    colorFilter = ColorFilter.tint(LocalColors.current.accent) // match @color/core_blue-ish
                 )
             }
         }
 
-        // Selection overlay (transparent_black_90)
+        // Selection overlay
         if (showSelectOverlay) {
             Box(
                 Modifier
                     .matchParentSize()
-                    .background(Color(0xE6000000))
+                    .background(Color.Black.copy(alpha = 0.80f))
             )
         }
 
@@ -268,7 +268,7 @@ private fun IndicatorOff(size: Dp, modifier: Modifier = Modifier) {
             .size(size)
             .clip(CircleShape)
             .border(
-                width = Dp.Hairline,
+                width = 1.dp,
                 color = LocalColors.current.text,
                 shape = CircleShape
             )

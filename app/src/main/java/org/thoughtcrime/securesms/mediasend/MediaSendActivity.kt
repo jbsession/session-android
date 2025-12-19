@@ -39,6 +39,8 @@ import org.thoughtcrime.securesms.ScreenLockActionBarActivity
 import org.thoughtcrime.securesms.database.RecipientRepository
 import org.thoughtcrime.securesms.mediasend.CameraXActivity.Companion.KEY_MEDIA_SEND_COUNT
 import org.thoughtcrime.securesms.mediasend.MediaSendViewModel.CountButtonState
+import org.thoughtcrime.securesms.mediasend.compose.MediaPickerFolderComposeFragment
+import org.thoughtcrime.securesms.mediasend.compose.MediaPickerItemComposeFragment
 import org.thoughtcrime.securesms.permissions.Permissions
 import org.thoughtcrime.securesms.scribbles.ImageEditorFragment
 import org.thoughtcrime.securesms.util.FilenameUtils.constructPhotoFilename
@@ -117,7 +119,7 @@ class MediaSendActivity : ScreenLockActionBarActivity(), MediaPickerFolderFragme
                     .replace(R.id.mediasend_fragment_container, fragment, TAG_SEND)
                     .commit()
             } else {
-                val fragment = MediaPickerFolderFragment.newInstance(
+                val fragment = MediaPickerFolderComposeFragment.newInstance(
                     recipient!!
                 )
                 supportFragmentManager.beginTransaction()
@@ -179,7 +181,7 @@ class MediaSendActivity : ScreenLockActionBarActivity(), MediaPickerFolderFragme
     override fun onFolderSelected(folder: MediaFolder) {
         viewModel.onFolderSelected(folder.bucketId)
 
-        val fragment = MediaPickerItemFragment.newInstance(
+        val fragment = MediaPickerItemComposeFragment.newInstance(
             folder.bucketId,
             folder.title,
             MediaSendViewModel.MAX_SELECTED_FILES
@@ -208,11 +210,11 @@ class MediaSendActivity : ScreenLockActionBarActivity(), MediaPickerFolderFragme
     }
 
     override fun onAddMediaClicked(bucketId: String) {
-        val folderFragment = MediaPickerFolderFragment.newInstance(
+        val folderFragment = MediaPickerFolderComposeFragment.newInstance(
             recipient!!
         )
         val itemFragment =
-            MediaPickerItemFragment.newInstance(bucketId, "", MediaSendViewModel.MAX_SELECTED_FILES)
+            MediaPickerItemComposeFragment.newInstance(bucketId, "", MediaSendViewModel.MAX_SELECTED_FILES)
 
         supportFragmentManager.beginTransaction()
             .setCustomAnimations(

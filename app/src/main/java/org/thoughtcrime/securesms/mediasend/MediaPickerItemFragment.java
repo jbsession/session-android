@@ -34,6 +34,7 @@ import network.loki.messenger.R;
 /**
  * Allows the user to select a set of media items from a specified folder.
  */
+@Deprecated
 @AndroidEntryPoint
 public class MediaPickerItemFragment extends Fragment implements MediaPickerItemAdapter.EventListener {
 
