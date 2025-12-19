@@ -194,8 +194,7 @@ class MediaSendViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 countVisibility = CountButtonState.Visibility.FORCED_OFF,
-                showCameraButton = false,
-                forcedMultiSelect = false
+                showCameraButton = false
             )
         }
     }
@@ -213,8 +212,7 @@ class MediaSendViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 countVisibility = CountButtonState.Visibility.CONDITIONAL,
-                showCameraButton = true,
-                forcedMultiSelect = false
+                showCameraButton = true
             )
         }
     }
