@@ -91,6 +91,26 @@ class MediaSendViewModel @Inject constructor(
         )
     }
 
+    fun onMediaSelected(media: Media) {
+        val updatedList = run {
+            val current = uiState.value.selectedMedia
+            val exists = current.any { it.uri == media.uri }
+
+            if (exists) {
+                current.filterNot { it.uri == media.uri }
+            } else {
+                if (current.size >= MAX_SELECTED_FILES) {
+                    _effects.tryEmit(MediaSendEffect.ShowError(Error.TOO_MANY_ITEMS))
+                    current
+                } else {
+                    current + media
+                }
+            }
+        }
+
+        onSelectedMediaChanged(updatedList)
+    }
+
     fun onSelectedMediaChanged(newMedia: List<Media?>) {
         repository.getPopulatedMedia(context, newMedia) { populatedMedia: List<Media> ->
             runOnMain {
@@ -141,7 +161,6 @@ class MediaSendViewModel @Inject constructor(
                         selectedMedia = filteredMedia,
                         bucketId = computedId,
                         countVisibility = newVisibility,
-                        forcedMultiSelect = it.forcedMultiSelect && filteredMedia.isNotEmpty()
                     )
                 }
             }
@@ -176,7 +195,6 @@ class MediaSendViewModel @Inject constructor(
                         selectedMedia = filteredMedia,
                         bucketId = newBucketId,
                         countVisibility = CountButtonState.Visibility.FORCED_OFF,
-                        forcedMultiSelect = false
                     )
                 }
             }
@@ -184,10 +202,11 @@ class MediaSendViewModel @Inject constructor(
     }
 
     fun onMultiSelectStarted() {
-        _uiState.update { it.copy(
-            countVisibility = CountButtonState.Visibility.FORCED_ON,
-            forcedMultiSelect = true
-        ) }
+        _uiState.update {
+            it.copy(
+                countVisibility = CountButtonState.Visibility.FORCED_ON
+            )
+        }
     }
 
     fun onImageEditorStarted() {
@@ -386,6 +405,11 @@ class MediaSendViewModel @Inject constructor(
         media: List<Media>,
         mediaConstraints: MediaConstraints
     ): Pair<List<Media>, Set<Error>> {
+
+        if (media.isEmpty()) {
+            return Pair(emptyList(), emptySet())
+        }
+
         val validMedia = ArrayList<Media>()
         val errors = HashSet<Error>()
 
@@ -475,9 +499,14 @@ class MediaSendViewModel @Inject constructor(
         val position: Int = -1,
         val countVisibility: CountButtonState.Visibility = CountButtonState.Visibility.FORCED_OFF,
         val showCameraButton: Boolean = false,
-        val forcedMultiSelect: Boolean = false, // previously in the adapter but put this here for now
     ) {
         val count: Int get() = selectedMedia.size
+
+        val isMultiSelect: Boolean
+            get() = selectedMedia.isNotEmpty() || countVisibility == CountButtonState.Visibility.FORCED_ON
+
+        val canLongPress: Boolean
+            get() = selectedMedia.isEmpty() && !isMultiSelect
         val showCountButton: Boolean
             get() =
                 when (countVisibility) {

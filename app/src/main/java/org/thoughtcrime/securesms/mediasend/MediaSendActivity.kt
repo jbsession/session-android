@@ -56,7 +56,7 @@ import javax.inject.Inject
  */
 @AndroidEntryPoint
 class MediaSendActivity : ScreenLockActionBarActivity(), MediaPickerFolderFragment.Controller,
-    MediaPickerItemFragment.Controller, MediaSendFragment.Controller,
+    MediaPickerItemComposeFragment.Controller, MediaSendFragment.Controller,
     ImageEditorFragment.Controller {
 
     private var recipient: Recipient? = null
@@ -183,8 +183,7 @@ class MediaSendActivity : ScreenLockActionBarActivity(), MediaPickerFolderFragme
 
         val fragment = MediaPickerItemComposeFragment.newInstance(
             folder.bucketId,
-            folder.title,
-            MediaSendViewModel.MAX_SELECTED_FILES
+            folder.title
         )
         supportFragmentManager.beginTransaction()
             .setCustomAnimations(
@@ -214,7 +213,7 @@ class MediaSendActivity : ScreenLockActionBarActivity(), MediaPickerFolderFragme
             recipient!!
         )
         val itemFragment =
-            MediaPickerItemComposeFragment.newInstance(bucketId, "", MediaSendViewModel.MAX_SELECTED_FILES)
+            MediaPickerItemComposeFragment.newInstance(bucketId, "")
 
         supportFragmentManager.beginTransaction()
             .setCustomAnimations(

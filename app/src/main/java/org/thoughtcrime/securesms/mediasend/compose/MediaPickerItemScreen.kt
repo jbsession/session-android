@@ -1,6 +1,5 @@
 package org.thoughtcrime.securesms.mediasend.compose
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,11 +17,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContentProviderCompat.requireContext
 import androidx.core.net.toUri
 import network.loki.messenger.R
 import org.session.libsession.utilities.MediaTypes
@@ -38,12 +35,10 @@ fun MediaPickerItemScreen(
     viewModel: MediaSendViewModel,
     bucketId: String,
     title: String,
-    maxSelection: Int,
     onBack: () -> Unit,
     onMediaSelected: (Media) -> Unit, // navigate to send screen
 ) {
     val uiState = viewModel.uiState.collectAsState().value
-    val context = LocalContext.current
 
     LaunchedEffect(bucketId) {
         viewModel.getMediaInBucket(bucketId) // triggers repository + updates uiState.bucketMedia
@@ -53,20 +48,20 @@ fun MediaPickerItemScreen(
     MediaPickerItem(
         title = title,
         media = uiState.bucketMedia,
-        selected = uiState.selectedMedia,
-        maxSelection = maxSelection,
+        selectedMedia = uiState.selectedMedia,
+        canLongPress = uiState.canLongPress,
         showMultiSelectAction = !uiState.showCountButton,
         onBack = onBack,
         onStartMultiSelect = {
             viewModel.onMultiSelectStarted()
         },
         onToggleSelection = { nextSelected ->
-            viewModel.onSelectedMediaChanged(nextSelected) // List<Media?>
+            viewModel.onMediaSelected(nextSelected) // List<Media?>
         },
         onSinglePick = { media ->
             onMediaSelected(media)
         },
-        forcedMultiSelect = uiState.forcedMultiSelect
+        isMultiSelect = uiState.isMultiSelect
     )
 
 }
@@ -76,17 +71,16 @@ fun MediaPickerItemScreen(
 private fun MediaPickerItem(
     title: String,
     media: List<Media>,
-    selected: List<Media>,
-    maxSelection: Int,
+    selectedMedia: List<Media>,
+    canLongPress: Boolean,
     showMultiSelectAction: Boolean,
     onBack: () -> Unit,
     onStartMultiSelect: () -> Unit,
-    onToggleSelection: (List<Media>) -> Unit,
+    onToggleSelection: (selectedMedia: Media) -> Unit,
     onSinglePick: (Media) -> Unit,
-    forcedMultiSelect: Boolean = false
+    isMultiSelect: Boolean = false
 ) {
 
-    val context = LocalContext.current.applicationContext
     val itemWidth = LocalDimensions.current.mediaPickerItemWidth
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
     val columns = maxOf(1, (screenWidth / itemWidth).toInt())
@@ -124,21 +118,17 @@ private fun MediaPickerItem(
             verticalArrangement = Arrangement.spacedBy(LocalDimensions.current.mediaItemGridSpacing)
         ) {
             items(media, key = { it.uri }) { item ->
+                val isSelected = selectedMedia.any { it.uri == item.uri }
                 MediaPickerItemCell(
                     media = item,
-                    selected = selected,
-                    forcedMultiSelect = forcedMultiSelect,
-                    maxSelection = maxSelection,
+                    isSelected = isSelected,
+                    selectedIndex = selectedMedia.indexOfFirst { it.uri == item.uri },
+                    isMultiSelect = isMultiSelect,
+                    canLongPress = canLongPress,
+                    showSelectionOn = isSelected,
                     onMediaChosen = { onSinglePick(it) },
                     onSelectionStarted = onStartMultiSelect,
                     onSelectionChanged = onToggleSelection,
-                    onSelectionOverflow = {
-                        Toast.makeText(
-                            context,
-                            R.string.attachmentsErrorNumber,
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
                 )
             }
         }
@@ -153,8 +143,8 @@ private fun Preview_MediaPickerItem_NoSelection() {
     MediaPickerItem(
         title = "Screenshots",
         media = media,
-        selected = emptyList(),
-        maxSelection = 32,
+        selectedMedia = emptyList(),
+        canLongPress = true,
         showMultiSelectAction = true,
         onBack = {},
         onStartMultiSelect = {},
@@ -172,8 +162,8 @@ private fun Preview_MediaPickerItem_WithSelection() {
     MediaPickerItem(
         title = "Camera Roll",
         media = media,
-        selected = selected,
-        maxSelection = 32,
+        selectedMedia = selected,
+        canLongPress = true,
         showMultiSelectAction = false,
         onBack = {},
         onStartMultiSelect = {},

@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,7 +19,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,13 +26,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.dimensionResource
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import com.bumptech.glide.integration.compose.ExperimentalGlideComposeApi
 import com.bumptech.glide.integration.compose.GlideImage
 import network.loki.messenger.R
@@ -43,8 +40,9 @@ import org.thoughtcrime.securesms.ui.theme.LocalColors
 import org.thoughtcrime.securesms.ui.theme.LocalType
 import org.thoughtcrime.securesms.util.MediaUtil
 import kotlin.collections.filterNot
-import kotlin.collections.indexOfFirst
 import androidx.core.net.toUri
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
 import org.thoughtcrime.securesms.ui.theme.LocalDimensions
 
 @OptIn(ExperimentalGlideComposeApi::class)
@@ -61,12 +59,15 @@ fun MediaFolderCell(
             .clickable(onClick = onClick)
     ) {
         Box(modifier = Modifier.aspectRatio(1f)) {
-            GlideImage(
-                model = thumbnailUri,
+            AsyncImage(
+                modifier = Modifier.fillMaxWidth(),
+                contentScale = ContentScale.Crop,
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(thumbnailUri)
+                    .build(),
                 contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
             )
+
             // Bottom shade overlay
             Box(
                 modifier = Modifier
@@ -125,34 +126,16 @@ fun MediaFolderCell(
 @Composable
 fun MediaPickerItemCell(
     media: Media,
-    selected: List<Media>,
-    forcedMultiSelect: Boolean,
-    maxSelection: Int,
+    isSelected: Boolean = false,
+    selectedIndex: Int = 1,
+    isMultiSelect: Boolean,
     onMediaChosen: (Media) -> Unit,
     onSelectionStarted: () -> Unit,
-    onSelectionChanged: (List<Media>) -> Unit,
-    onSelectionOverflow: (Int) -> Unit,
+    onSelectionChanged: (selectedMedia: Media) -> Unit,
     modifier: Modifier = Modifier,
+    showSelectionOn: Boolean = false,
+    canLongPress: Boolean = true
 ) {
-    val isSelected = selected.any { it.uri == media.uri }
-    val selectedIndex = remember(selected, media) {
-        selected.indexOfFirst { it.uri == media.uri }
-    }
-
-    // Matches adapter rules:
-    val inSelectionUi = !(selected.isEmpty() && !forcedMultiSelect)
-    val showSelectOff = inSelectionUi
-    val showSelectOn = inSelectionUi && isSelected
-    val showSelectOverlay = isSelected
-
-    val canStartSelectionByLongPress = maxSelection > 1 && selected.isEmpty() && !forcedMultiSelect
-
-    fun removeFromSelection(): List<Media> =
-        selected.filterNot { it.uri == media.uri }
-
-    fun addToSelection(): List<Media> =
-        selected + media
-
     Box(
         modifier = modifier
             .aspectRatio(1f)
@@ -162,36 +145,29 @@ fun MediaPickerItemCell(
             )
             .combinedClickable(
                 onClick = {
-                    if (selected.isEmpty() && !forcedMultiSelect) {
-                        // adapter: direct choose
-                        onMediaChosen(media)
-                    } else if (isSelected) {
-                        // adapter: remove
-                        onSelectionChanged(removeFromSelection())
+                    if (!isMultiSelect) {
+                        onMediaChosen(media) // Choosing a single media
                     } else {
-                        // adapter: add if room else overflow
-                        if (selected.size < maxSelection) {
-                            onSelectionChanged(addToSelection())
-                        } else {
-                            onSelectionOverflow(maxSelection)
-                        }
+                        onSelectionChanged(media) // Selecting/unselecting media
                     }
                 },
-                onLongClick = if (canStartSelectionByLongPress) {
+                onLongClick = if (canLongPress) {
                     {
-                        // adapter: long press starts selection, adds this item
-                        onSelectionChanged(listOf(media))
+                        // long press starts selection, adds this item
+                        onSelectionChanged(media)
                         onSelectionStarted()
                     }
                 } else null
             )
     ) {
         // Thumbnail
-        GlideImage(
-            model = media.uri,
-            contentDescription = null,
+        AsyncImage(
             modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
+            contentScale = ContentScale.Crop,
+            model = ImageRequest.Builder(LocalContext.current)
+                .data(media.uri)
+                .build(),
+            contentDescription = null,
         )
 
         // Play overlay (center) for video
@@ -214,7 +190,7 @@ fun MediaPickerItemCell(
         }
 
         // Selection overlay
-        if (showSelectOverlay) {
+        if (isSelected) {
             Box(
                 Modifier
                     .matchParentSize()
@@ -222,33 +198,33 @@ fun MediaPickerItemCell(
             )
         }
 
-        // Select OFF badge (top-end)
-        if (showSelectOff) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(LocalDimensions.current.xxsSpacing)
-            ) {
-                IndicatorOff(size = LocalDimensions.current.smallRadius)
-            }
-        }
+        if (isMultiSelect) {
+            // Select ON badge + order number (top-end)
+            if (showSelectionOn) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(LocalDimensions.current.xxsSpacing),
+                    contentAlignment = Alignment.Center
+                ) {
+                    IndicatorOn(size = LocalDimensions.current.smallRadius)
 
-        // Select ON badge + order number (top-end)
-        if (showSelectOn) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(LocalDimensions.current.xxsSpacing),
-                contentAlignment = Alignment.Center
-            ) {
-                IndicatorOn(size = LocalDimensions.current.smallRadius)
-
-                Text(
-                    text = (selectedIndex + 1).toString(),
-                    color = LocalColors.current.onInvertedBackgroundAccent,
-                    style = LocalType.current.base,
-                    textAlign = TextAlign.Center
-                )
+                    Text(
+                        text = (selectedIndex + 1).toString(),
+                        color = LocalColors.current.onInvertedBackgroundAccent,
+                        style = LocalType.current.base,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            } else {
+                // Select OFF badge
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(LocalDimensions.current.xxsSpacing)
+                ) {
+                    IndicatorOff(size = LocalDimensions.current.smallRadius)
+                }
             }
         }
     }
@@ -298,13 +274,11 @@ private fun Preview_MediaPickerItemCell_NotSelected() {
 
     MediaPickerItemCell(
         media = media,
-        selected = emptyList(),
-        forcedMultiSelect = false,
-        maxSelection = 32,
+        isMultiSelect = false,
+        canLongPress = true,
         onMediaChosen = {},
         onSelectionStarted = {},
         onSelectionChanged = {},
-        onSelectionOverflow = {},
     )
 }
 
@@ -315,13 +289,11 @@ private fun Preview_MediaPickerItemCell_Selected() {
 
     MediaPickerItemCell(
         media = media,
-        selected = listOf(media), // selectedIndex = 0 -> shows "1"
-        forcedMultiSelect = true,
-        maxSelection = 32,
+        isMultiSelect = true,
+        canLongPress = true,
         onMediaChosen = {},
         onSelectionStarted = {},
         onSelectionChanged = {},
-        onSelectionOverflow = {},
     )
 }
 
