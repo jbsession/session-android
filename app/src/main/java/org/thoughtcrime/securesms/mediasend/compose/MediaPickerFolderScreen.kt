@@ -2,6 +2,7 @@ package org.thoughtcrime.securesms.mediasend.compose
 
 import android.annotation.SuppressLint
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -29,13 +30,13 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
-import androidx.lifecycle.viewmodel.compose.viewModel
 import network.loki.messenger.R
 import org.thoughtcrime.securesms.conversation.v2.utilities.AttachmentManager
 import org.thoughtcrime.securesms.mediasend.MediaFolder
 import org.thoughtcrime.securesms.mediasend.MediaSendViewModel
 import org.thoughtcrime.securesms.ui.components.BackAppBar
 import org.thoughtcrime.securesms.ui.theme.LocalColors
+import org.thoughtcrime.securesms.ui.theme.LocalDimensions
 
 @Composable
 fun MediaPickerFolderScreen(
@@ -111,14 +112,19 @@ private fun MediaPickerFolder(
                 columns = GridCells.Fixed(columns),
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(LocalColors.current.background)
+                    .background(LocalColors.current.background),
+                horizontalArrangement = Arrangement.spacedBy(LocalDimensions.current.mediaItemGridSpacing),
+                verticalArrangement = Arrangement.spacedBy(LocalDimensions.current.mediaItemGridSpacing)
             ) {
-                items(folders) { folder ->
+                items(
+                    items = folders,
+                    key = { folder -> folder.bucketId }
+                ) { folder ->
                     MediaFolderCell(
                         title = folder.title,
                         count = folder.itemCount,
                         thumbnailUri = folder.thumbnailUri,
-                        onClick = { onFolderClick(folder) }
+                        onClick = { onFolderClick(folder) },
                     )
                 }
             }

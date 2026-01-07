@@ -45,6 +45,7 @@ import org.thoughtcrime.securesms.util.MediaUtil
 import kotlin.collections.filterNot
 import kotlin.collections.indexOfFirst
 import androidx.core.net.toUri
+import org.thoughtcrime.securesms.ui.theme.LocalDimensions
 
 @OptIn(ExperimentalGlideComposeApi::class)
 @Composable
@@ -56,7 +57,6 @@ fun MediaFolderCell(
 ) {
     Box(
         modifier = Modifier
-            .padding(end = 2.dp, bottom = 2.dp)
             .fillMaxWidth()
             .clickable(onClick = onClick)
     ) {
@@ -72,50 +72,49 @@ fun MediaFolderCell(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .height(50.dp)
                     .background(
                         Brush.verticalGradient(
                             colorStops = arrayOf(
                                 0.0f to Color.Transparent,
-                                0.5f to Color.Black.copy(alpha = 0.5333f),
-                                1.0f to Color.Black.copy(alpha = 0.6667f)
+                                0.5f to Color.Black.copy(alpha = 0.5f),
+                                1.0f to Color.Black.copy(alpha = 0.7f)
                             )
                         )
                     )
-            )
-            // Bottom row
-            Row(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .padding(6.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(LocalDimensions.current.smallSpacing)
             ) {
-                Image(
-                    painter = painterResource(R.drawable.ic_baseline_folder_24),
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    colorFilter = ColorFilter.tint(Color.White)
-                )
+                // Bottom row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.ic_baseline_folder_24),
+                        contentDescription = null,
+                        modifier = Modifier.size(LocalDimensions.current.iconSmall),
+                        colorFilter = ColorFilter.tint(Color.White)
+                    )
 
-                Spacer(Modifier.width(6.dp))
+                    Spacer(Modifier.width(LocalDimensions.current.xxsSpacing))
 
-                Text(
-                    text = title,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = Color.White,
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                    Text(
+                        text = title,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
 
-                Spacer(Modifier.width(6.dp))
+                    Spacer(Modifier.width(LocalDimensions.current.xxsSpacing))
 
-                Text(
-                    text = count.toString(),
-                    color = Color.White,
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                    Text(
+                        text = count.toString(),
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
         }
     }
@@ -156,8 +155,11 @@ fun MediaPickerItemCell(
 
     Box(
         modifier = modifier
-            .padding(end = 2.dp, bottom = 2.dp)
             .aspectRatio(1f)
+            .border(
+                width = LocalDimensions.current.borderStroke,
+                color = Color.White.copy(alpha = 0.20f)
+            )
             .combinedClickable(
                 onClick = {
                     if (selected.isEmpty() && !forcedMultiSelect) {
@@ -192,19 +194,12 @@ fun MediaPickerItemCell(
             contentScale = ContentScale.Crop
         )
 
-        // Border overlay (replaces @drawable/mediapicker_item_border_dark View)
-        Box(
-            Modifier
-                .matchParentSize()
-                .border(width = 1.dp, color = Color.White.copy(alpha = 0.20f))
-        )
-
         // Play overlay (center) for video
         if (MediaUtil.isVideoType(media.mimeType)) {
             Box(
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .size(36.dp)
+                    .size(LocalDimensions.current.mediaPlayOverlay)
                     .clip(CircleShape)
                     .background(Color.White),
                 contentAlignment = Alignment.Center
@@ -212,9 +207,7 @@ fun MediaPickerItemCell(
                 Image(
                     painter = painterResource(R.drawable.triangle_right),
                     contentDescription = null,
-                    modifier = Modifier
-                        .size(width = 15.dp, height = 18.dp)
-                        .padding(start = 2.dp),
+                    modifier = Modifier.size(LocalDimensions.current.iconMedium),
                     colorFilter = ColorFilter.tint(LocalColors.current.accent) // match @color/core_blue-ish
                 )
             }
@@ -234,9 +227,9 @@ fun MediaPickerItemCell(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(6.dp)
+                    .padding(LocalDimensions.current.xxsSpacing)
             ) {
-                IndicatorOff(size = dimensionResource(R.dimen.small_radial_size))
+                IndicatorOff(size = LocalDimensions.current.smallRadius)
             }
         }
 
@@ -245,10 +238,10 @@ fun MediaPickerItemCell(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(6.dp),
+                    .padding(LocalDimensions.current.xxsSpacing),
                 contentAlignment = Alignment.Center
             ) {
-                IndicatorOn(size = dimensionResource(R.dimen.small_radial_size))
+                IndicatorOn(size = LocalDimensions.current.smallRadius)
 
                 Text(
                     text = (selectedIndex + 1).toString(),
@@ -268,7 +261,7 @@ private fun IndicatorOff(size: Dp, modifier: Modifier = Modifier) {
             .size(size)
             .clip(CircleShape)
             .border(
-                width = 1.dp,
+                width = LocalDimensions.current.borderStroke,
                 color = LocalColors.current.text,
                 shape = CircleShape
             )

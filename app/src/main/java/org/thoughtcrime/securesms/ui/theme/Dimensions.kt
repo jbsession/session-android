@@ -52,5 +52,11 @@ data class Dimensions(
     val minContentSize: Dp = 80.dp,
     val maxContentSize: Dp = 520.dp,
     val minContentSizeMedium: Dp = 160.dp,
-    val maxContentSizeMedium: Dp = 620.dp
+    val maxContentSizeMedium: Dp = 620.dp,
+
+    val mediaPickerItemWidth : Dp = 85.dp,
+    val mediaItemGridSpacing : Dp = 2.dp,
+    val mediaPlayOverlay : Dp = 36.dp,
+
+    val smallRadius : Dp = 26.dp
 )

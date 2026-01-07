@@ -2,6 +2,7 @@ package org.thoughtcrime.securesms.mediasend.compose
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -30,6 +31,7 @@ import org.thoughtcrime.securesms.mediasend.Media.Companion.ALL_MEDIA_BUCKET_ID
 import org.thoughtcrime.securesms.mediasend.MediaSendViewModel
 import org.thoughtcrime.securesms.ui.components.BackAppBar
 import org.thoughtcrime.securesms.ui.theme.LocalColors
+import org.thoughtcrime.securesms.ui.theme.LocalDimensions
 
 @Composable
 fun MediaPickerItemScreen(
@@ -85,8 +87,7 @@ private fun MediaPickerItem(
 ) {
 
     val context = LocalContext.current.applicationContext
-    // spanCount = screenWidth / itemWidth (same as fragment)
-    val itemWidth = dimensionResource(R.dimen.media_picker_item_width)
+    val itemWidth = LocalDimensions.current.mediaPickerItemWidth
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
     val columns = maxOf(1, (screenWidth / itemWidth).toInt())
 
@@ -118,7 +119,9 @@ private fun MediaPickerItem(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .background(LocalColors.current.background)
+                .background(LocalColors.current.background),
+            horizontalArrangement = Arrangement.spacedBy(LocalDimensions.current.mediaItemGridSpacing),
+            verticalArrangement = Arrangement.spacedBy(LocalDimensions.current.mediaItemGridSpacing)
         ) {
             items(media, key = { it.uri }) { item ->
                 MediaPickerItemCell(
