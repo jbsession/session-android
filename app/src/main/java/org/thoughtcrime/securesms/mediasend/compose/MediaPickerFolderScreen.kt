@@ -113,8 +113,8 @@ private fun MediaPickerFolder(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(LocalColors.current.background),
-                horizontalArrangement = Arrangement.spacedBy(LocalDimensions.current.mediaItemGridSpacing),
-                verticalArrangement = Arrangement.spacedBy(LocalDimensions.current.mediaItemGridSpacing)
+                horizontalArrangement = Arrangement.spacedBy(LocalDimensions.current.tinySpacing),
+                verticalArrangement = Arrangement.spacedBy(LocalDimensions.current.tinySpacing)
             ) {
                 items(
                     items = folders,

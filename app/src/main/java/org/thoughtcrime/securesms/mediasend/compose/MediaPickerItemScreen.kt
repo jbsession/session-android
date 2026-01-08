@@ -16,7 +16,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -81,7 +80,7 @@ private fun MediaPickerItem(
     isMultiSelect: Boolean = false
 ) {
 
-    val itemWidth = LocalDimensions.current.mediaPickerItemWidth
+    val itemWidth = 85.dp
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
     val columns = maxOf(1, (screenWidth / itemWidth).toInt())
 
@@ -114,8 +113,8 @@ private fun MediaPickerItem(
                 .padding(padding)
                 .fillMaxSize()
                 .background(LocalColors.current.background),
-            horizontalArrangement = Arrangement.spacedBy(LocalDimensions.current.mediaItemGridSpacing),
-            verticalArrangement = Arrangement.spacedBy(LocalDimensions.current.mediaItemGridSpacing)
+            horizontalArrangement = Arrangement.spacedBy(LocalDimensions.current.tinySpacing),
+            verticalArrangement = Arrangement.spacedBy(LocalDimensions.current.tinySpacing)
         ) {
             items(media, key = { it.uri }) { item ->
                 val isSelected = selectedMedia.any { it.uri == item.uri }

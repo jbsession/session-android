@@ -32,20 +32,18 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
-import com.bumptech.glide.integration.compose.ExperimentalGlideComposeApi
-import com.bumptech.glide.integration.compose.GlideImage
-import network.loki.messenger.R
-import org.thoughtcrime.securesms.mediasend.Media
-import org.thoughtcrime.securesms.ui.theme.LocalColors
-import org.thoughtcrime.securesms.ui.theme.LocalType
-import org.thoughtcrime.securesms.util.MediaUtil
-import kotlin.collections.filterNot
+import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
+import com.bumptech.glide.integration.compose.ExperimentalGlideComposeApi
+import network.loki.messenger.R
+import org.thoughtcrime.securesms.mediasend.Media
+import org.thoughtcrime.securesms.ui.theme.LocalColors
 import org.thoughtcrime.securesms.ui.theme.LocalDimensions
+import org.thoughtcrime.securesms.ui.theme.LocalType
+import org.thoughtcrime.securesms.util.MediaUtil
 
-@OptIn(ExperimentalGlideComposeApi::class)
 @Composable
 fun MediaFolderCell(
     title: String,
@@ -141,7 +139,7 @@ fun MediaPickerItemCell(
             .aspectRatio(1f)
             .border(
                 width = LocalDimensions.current.borderStroke,
-                color = Color.White.copy(alpha = 0.20f)
+                color = LocalColors.current.borders.copy(alpha = 0.20f)
             )
             .combinedClickable(
                 onClick = {
@@ -175,7 +173,7 @@ fun MediaPickerItemCell(
             Box(
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .size(LocalDimensions.current.mediaPlayOverlay)
+                    .size(36.dp)
                     .clip(CircleShape)
                     .background(Color.White),
                 contentAlignment = Alignment.Center
@@ -207,7 +205,7 @@ fun MediaPickerItemCell(
                         .padding(LocalDimensions.current.xxsSpacing),
                     contentAlignment = Alignment.Center
                 ) {
-                    IndicatorOn(size = LocalDimensions.current.smallRadius)
+                    IndicatorOn()
 
                     Text(
                         text = (selectedIndex + 1).toString(),
@@ -223,7 +221,7 @@ fun MediaPickerItemCell(
                         .align(Alignment.TopEnd)
                         .padding(LocalDimensions.current.xxsSpacing)
                 ) {
-                    IndicatorOff(size = LocalDimensions.current.smallRadius)
+                    IndicatorOff()
                 }
             }
         }
@@ -231,7 +229,7 @@ fun MediaPickerItemCell(
 }
 
 @Composable
-private fun IndicatorOff(size: Dp, modifier: Modifier = Modifier) {
+private fun IndicatorOff(modifier: Modifier = Modifier, size: Dp = 26.dp ) {
     Box(
         modifier = modifier
             .size(size)
@@ -245,7 +243,7 @@ private fun IndicatorOff(size: Dp, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun IndicatorOn(size: Dp, modifier: Modifier = Modifier) {
+private fun IndicatorOn(modifier: Modifier = Modifier, size: Dp = 26.dp) {
     Box(
         modifier = modifier
             .size(size)
