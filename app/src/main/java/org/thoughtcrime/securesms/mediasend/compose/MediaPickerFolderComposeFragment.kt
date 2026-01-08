@@ -16,6 +16,8 @@ import network.loki.messenger.R
 import org.session.libsession.utilities.StringSubstitutionConstants
 import org.session.libsession.utilities.recipients.Recipient
 import org.session.libsession.utilities.recipients.displayName
+import org.thoughtcrime.securesms.conversation.v2.utilities.AttachmentManager
+import org.thoughtcrime.securesms.mediasend.MediaFolder
 import org.thoughtcrime.securesms.mediasend.MediaPickerFolderFragment
 import org.thoughtcrime.securesms.mediasend.MediaSendViewModel
 import org.thoughtcrime.securesms.ui.setThemedContent
@@ -26,11 +28,11 @@ class MediaPickerFolderComposeFragment : Fragment() {
     private val viewModel: MediaSendViewModel by activityViewModels()
 
     private var recipientName: String? = null
-    private var controller: MediaPickerFolderFragment.Controller? = null
+    private var controller: Controller? = null
 
     override fun onAttach(context: Context) {
         super.onAttach(context)
-        controller = activity as? MediaPickerFolderFragment.Controller
+        controller = activity as? Controller
             ?: throw IllegalStateException("Parent activity must implement controller class.")
     }
 
@@ -42,6 +44,7 @@ class MediaPickerFolderComposeFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         viewModel.onFolderPickerStarted()
+        viewModel.refreshPhotoAccessUi()
     }
 
     override fun onCreateView(
@@ -68,9 +71,16 @@ class MediaPickerFolderComposeFragment : Fragment() {
                     },
                     onFolderClick = { folder ->
                         controller?.onFolderSelected(folder)
-                    }
+                    },
+                    manageMediaAccess = ::manageMediaAccess
                 )
             }
+        }
+    }
+
+    fun manageMediaAccess() {
+        AttachmentManager.managePhotoAccess(requireActivity()) {
+            viewModel.refreshFolders()
         }
     }
 
@@ -84,5 +94,9 @@ class MediaPickerFolderComposeFragment : Fragment() {
                 }
             }
         }
+    }
+
+    interface Controller {
+        fun onFolderSelected(folder: MediaFolder)
     }
 }

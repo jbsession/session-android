@@ -21,17 +21,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.fragment.app.FragmentActivity
 import network.loki.messenger.R
-import org.thoughtcrime.securesms.conversation.v2.utilities.AttachmentManager
 import org.thoughtcrime.securesms.mediasend.MediaFolder
 import org.thoughtcrime.securesms.mediasend.MediaSendViewModel
 import org.thoughtcrime.securesms.ui.components.BackAppBar
@@ -43,7 +39,8 @@ fun MediaPickerFolderScreen(
     viewModel: MediaSendViewModel,
     onFolderClick: (MediaFolder) -> Unit,
     title: String,
-    handleBack: () -> Unit
+    handleBack: () -> Unit,
+    manageMediaAccess: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -57,7 +54,8 @@ fun MediaPickerFolderScreen(
         onFolderClick = onFolderClick,
         title = title,
         handleBack = handleBack,
-        refreshFolders = { viewModel.refreshFolders() }
+        showManageMediaAccess = uiState.showManagePhotoAccess,
+        manageMediaAccess = manageMediaAccess
     )
 }
 
@@ -69,18 +67,13 @@ private fun MediaPickerFolder(
     onFolderClick: (folder: MediaFolder) -> Unit,
     title: String,
     handleBack: () -> Unit,
-    refreshFolders: () -> Unit
+    showManageMediaAccess: Boolean,
+    manageMediaAccess : () -> Unit
 ) {
 
     // span logic: screenWidth / media_picker_folder_width
     val folderWidth = dimensionResource(R.dimen.media_picker_folder_width)
     val columns = maxOf(1, (LocalConfiguration.current.screenWidthDp.dp / folderWidth).toInt())
-
-    val context = LocalContext.current
-    val activity = context as? FragmentActivity
-    val showManage = remember(activity) {
-        activity?.let { AttachmentManager.shouldShowManagePhoto(it) } == true
-    }
 
     Scaffold(
         topBar = {
@@ -88,12 +81,10 @@ private fun MediaPickerFolder(
                 title = title,
                 onBack = handleBack,
                 actions = {
-                    if (showManage && activity != null) {
+                    if (showManageMediaAccess) {
                         IconButton(
                             onClick = {
-                                AttachmentManager.managePhotoAccess(activity) {
-                                    refreshFolders()
-                                }
+                                manageMediaAccess()
                             }
                         ) {
                             Icon(
@@ -159,6 +150,7 @@ private fun MediaPickerFolderPreview() {
         onFolderClick = {},
         title = "Folders",
         handleBack = {},
-        refreshFolders = {}
+        showManageMediaAccess = true,
+        manageMediaAccess = {}
     )
 }

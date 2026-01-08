@@ -3,6 +3,7 @@ package org.thoughtcrime.securesms.mediasend
 import android.app.Application
 import android.content.Context
 import android.net.Uri
+import android.os.Build
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.asLiveData
 import com.annimon.stream.Stream
@@ -21,6 +22,8 @@ import org.session.libsignal.utilities.Log
 import org.session.libsignal.utilities.guava.Optional
 import org.thoughtcrime.securesms.ApplicationContext
 import org.thoughtcrime.securesms.InputbarViewModel
+import org.thoughtcrime.securesms.conversation.v2.utilities.AttachmentManager.hasFullAccess
+import org.thoughtcrime.securesms.conversation.v2.utilities.AttachmentManager.hasPartialAccess
 import org.thoughtcrime.securesms.database.RecipientRepository
 import org.thoughtcrime.securesms.mms.MediaConstraints
 import org.thoughtcrime.securesms.pro.ProStatusManager
@@ -337,6 +340,14 @@ class MediaSendViewModel @Inject constructor(
         lastImageCapture = Optional.absent()
     }
 
+    fun refreshPhotoAccessUi() {
+        val show = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+                !hasFullAccess(context) &&
+                hasPartialAccess(context)
+
+        _uiState.update { it.copy(showManagePhotoAccess = show) }
+    }
+
     fun saveDrawState(state: Map<Uri, Any>) {
         savedDrawState.clear()
         savedDrawState.putAll(state)
@@ -499,6 +510,7 @@ class MediaSendViewModel @Inject constructor(
         val position: Int = -1,
         val countVisibility: CountButtonState.Visibility = CountButtonState.Visibility.FORCED_OFF,
         val showCameraButton: Boolean = false,
+        val showManagePhotoAccess : Boolean = false
     ) {
         val count: Int get() = selectedMedia.size
 

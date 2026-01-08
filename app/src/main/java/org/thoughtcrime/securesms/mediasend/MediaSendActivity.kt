@@ -55,7 +55,7 @@ import javax.inject.Inject
  * It will return the [Media] that the user decided to send.
  */
 @AndroidEntryPoint
-class MediaSendActivity : ScreenLockActionBarActivity(), MediaPickerFolderFragment.Controller,
+class MediaSendActivity : ScreenLockActionBarActivity(), MediaPickerFolderComposeFragment.Controller,
     MediaPickerItemComposeFragment.Controller, MediaSendFragment.Controller,
     ImageEditorFragment.Controller {
 
