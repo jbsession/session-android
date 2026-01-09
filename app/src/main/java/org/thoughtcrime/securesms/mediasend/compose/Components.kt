@@ -75,8 +75,8 @@ fun MediaFolderCell(
                         Brush.verticalGradient(
                             colorStops = arrayOf(
                                 0.0f to Color.Transparent,
-                                0.5f to Color.Black.copy(alpha = 0.5f),
-                                1.0f to Color.Black.copy(alpha = 0.7f)
+                                0.5f to Color.Black.copy(alpha = 0.8f),
+                                1.0f to Color.Black.copy(alpha = 0.9f)
                             )
                         )
                     )
@@ -139,7 +139,7 @@ fun MediaPickerItemCell(
             .aspectRatio(1f)
             .border(
                 width = LocalDimensions.current.borderStroke,
-                color = LocalColors.current.borders.copy(alpha = 0.20f)
+                color = LocalColors.current.borders
             )
             .combinedClickable(
                 onClick = {

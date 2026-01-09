@@ -102,6 +102,7 @@ private fun MediaPickerFolder(
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),
                 modifier = Modifier
+                    .padding(LocalDimensions.current.tinySpacing)
                     .fillMaxSize()
                     .background(LocalColors.current.background),
                 horizontalArrangement = Arrangement.spacedBy(LocalDimensions.current.tinySpacing),

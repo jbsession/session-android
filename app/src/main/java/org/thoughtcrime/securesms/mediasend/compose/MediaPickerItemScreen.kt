@@ -2,6 +2,7 @@ package org.thoughtcrime.securesms.mediasend.compose
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -107,28 +108,30 @@ private fun MediaPickerItem(
             )
         },
     ) { padding ->
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(columns),
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize()
-                .background(LocalColors.current.background),
-            horizontalArrangement = Arrangement.spacedBy(LocalDimensions.current.tinySpacing),
-            verticalArrangement = Arrangement.spacedBy(LocalDimensions.current.tinySpacing)
-        ) {
-            items(media, key = { it.uri }) { item ->
-                val isSelected = selectedMedia.any { it.uri == item.uri }
-                MediaPickerItemCell(
-                    media = item,
-                    isSelected = isSelected,
-                    selectedIndex = selectedMedia.indexOfFirst { it.uri == item.uri },
-                    isMultiSelect = isMultiSelect,
-                    canLongPress = canLongPress,
-                    showSelectionOn = isSelected,
-                    onMediaChosen = { onSinglePick(it) },
-                    onSelectionStarted = onStartMultiSelect,
-                    onSelectionChanged = onToggleSelection,
-                )
+        Box(modifier = Modifier.padding(padding)) {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(columns),
+                modifier = Modifier
+                    .padding(LocalDimensions.current.tinySpacing)
+                    .fillMaxSize()
+                    .background(LocalColors.current.background),
+                horizontalArrangement = Arrangement.spacedBy(LocalDimensions.current.tinySpacing),
+                verticalArrangement = Arrangement.spacedBy(LocalDimensions.current.tinySpacing)
+            ) {
+                items(media, key = { it.uri }) { item ->
+                    val isSelected = selectedMedia.any { it.uri == item.uri }
+                    MediaPickerItemCell(
+                        media = item,
+                        isSelected = isSelected,
+                        selectedIndex = selectedMedia.indexOfFirst { it.uri == item.uri },
+                        isMultiSelect = isMultiSelect,
+                        canLongPress = canLongPress,
+                        showSelectionOn = isSelected,
+                        onMediaChosen = { onSinglePick(it) },
+                        onSelectionStarted = onStartMultiSelect,
+                        onSelectionChanged = onToggleSelection,
+                    )
+                }
             }
         }
     }
