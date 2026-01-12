@@ -108,10 +108,10 @@ private fun MediaPickerItem(
             )
         },
     ) { padding ->
-        Box(modifier = Modifier.padding(padding)) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),
                 modifier = Modifier
+                    .padding(padding)
                     .padding(LocalDimensions.current.tinySpacing)
                     .fillMaxSize()
                     .background(LocalColors.current.background),
@@ -133,7 +133,6 @@ private fun MediaPickerItem(
                     )
                 }
             }
-        }
     }
 }
 

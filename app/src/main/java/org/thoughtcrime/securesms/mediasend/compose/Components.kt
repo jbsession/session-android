@@ -76,7 +76,6 @@ fun MediaFolderCell(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .background( Color.Transparent)
                     .innerShadow(
                         shape = RectangleShape,
                         shadow = Shadow(

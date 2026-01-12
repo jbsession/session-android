@@ -72,7 +72,7 @@ private fun MediaPickerFolder(
 ) {
 
     // span logic: screenWidth / media_picker_folder_width
-    val folderWidth = dimensionResource(R.dimen.media_picker_folder_width)
+    val folderWidth = 175.dp
     val columns = maxOf(1, (LocalConfiguration.current.screenWidthDp.dp / folderWidth).toInt())
 
     Scaffold(
