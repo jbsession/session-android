@@ -1,6 +1,13 @@
 package org.thoughtcrime.securesms.mediasend.compose
 
 import android.net.Uri
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -16,7 +23,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,7 +30,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.innerShadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.RectangleShape
@@ -44,6 +49,7 @@ import coil3.request.ImageRequest
 import com.bumptech.glide.integration.compose.ExperimentalGlideComposeApi
 import network.loki.messenger.R
 import org.thoughtcrime.securesms.mediasend.Media
+import org.thoughtcrime.securesms.ui.AnimateFade
 import org.thoughtcrime.securesms.ui.theme.LocalColors
 import org.thoughtcrime.securesms.ui.theme.LocalDimensions
 import org.thoughtcrime.securesms.ui.theme.LocalType
@@ -59,65 +65,65 @@ fun MediaFolderCell(
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .aspectRatio(1f)
             .clickable(onClick = onClick)
     ) {
-        Box(modifier = Modifier.aspectRatio(1f)) {
-            AsyncImage(
-                modifier = Modifier.fillMaxWidth(),
-                contentScale = ContentScale.Crop,
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(thumbnailUri)
-                    .build(),
-                contentDescription = null,
-            )
+        AsyncImage(
+            modifier = Modifier.fillMaxWidth(),
+            contentScale = ContentScale.Crop,
+            model = ImageRequest.Builder(LocalContext.current)
+                .data(thumbnailUri)
+                .build(),
+            contentDescription = null,
+        )
 
-            // Bottom shade overlay
-            Box(
+        // Bottom row
+        Box(
+            modifier = Modifier.fillMaxSize()
+                .innerShadow(
+                shape = RectangleShape,
+                shadow = Shadow(
+                    radius = 8.dp,
+                    color = Color.Black.copy(alpha = 0.4f),
+                    offset = DpOffset(x = 0.dp, (-40).dp) // shadow appears form the bottom
+                )
+            )
+        ) {
+            Row(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .innerShadow(
-                        shape = RectangleShape,
-                        shadow = Shadow(
-                            radius = 8.dp,
-                            color = Color.Black.copy(alpha = 0.4f),
-                            offset = DpOffset(x = (-2).dp, (-40).dp) // shadow appears form the bottom
-                        )
-                    )
-                    .padding(LocalDimensions.current.smallSpacing)
+                    .padding(
+                        horizontal = LocalDimensions.current.smallSpacing,
+                        vertical = LocalDimensions.current.xxsSpacing
+                    ),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Bottom row
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Image(
-                        painter = painterResource(R.drawable.ic_baseline_folder_24),
-                        contentDescription = null,
-                        modifier = Modifier.size(LocalDimensions.current.iconSmall),
-                        colorFilter = ColorFilter.tint(Color.White)
-                    )
+                Image(
+                    painter = painterResource(R.drawable.ic_baseline_folder_24),
+                    contentDescription = null,
+                    modifier = Modifier.size(LocalDimensions.current.iconSmall),
+                    colorFilter = ColorFilter.tint(Color.White)
+                )
 
-                    Spacer(Modifier.width(LocalDimensions.current.xxsSpacing))
+                Spacer(Modifier.width(LocalDimensions.current.xxsSpacing))
 
-                    Text(
-                        text = title,
-                        modifier = Modifier.weight(1f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                Text(
+                    text = title,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyMedium
+                )
 
-                    Spacer(Modifier.width(LocalDimensions.current.xxsSpacing))
+                Spacer(Modifier.width(LocalDimensions.current.xxsSpacing))
 
-                    Text(
-                        text = count.toString(),
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
+                Text(
+                    text = count.toString(),
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
         }
     }
@@ -141,10 +147,6 @@ fun MediaPickerItemCell(
     Box(
         modifier = modifier
             .aspectRatio(1f)
-            .border(
-                width = LocalDimensions.current.borderStroke,
-                color = LocalColors.current.borders
-            )
             .combinedClickable(
                 onClick = {
                     if (!isMultiSelect) {
@@ -192,7 +194,7 @@ fun MediaPickerItemCell(
         }
 
         // Selection overlay
-        if (isSelected) {
+        AnimateFade(isSelected, modifier = Modifier.matchParentSize()) {
             Box(
                 Modifier
                     .matchParentSize()
@@ -200,36 +202,41 @@ fun MediaPickerItemCell(
             )
         }
 
-        if (isMultiSelect) {
-            // Select ON badge + order number (top-end)
-            if (showSelectionOn) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(LocalDimensions.current.xxsSpacing),
-                    contentAlignment = Alignment.Center
-                ) {
-                    IndicatorOn()
 
+        val state: BadgeState =
+            when {
+                !isMultiSelect -> BadgeState.Hidden
+                selectedIndex < 0 -> BadgeState.Off
+                else -> BadgeState.On(selectedIndex + 1)
+            }
+
+        Crossfade(
+            targetState = state,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(LocalDimensions.current.xxsSpacing),
+        ) { s ->
+            when (s) {
+                BadgeState.Hidden -> Unit
+                BadgeState.Off -> IndicatorOff()
+                is BadgeState.On -> Box(contentAlignment = Alignment.Center) {
+                    IndicatorOn()
                     Text(
-                        text = (selectedIndex + 1).toString(),
-                        color = Color.White,
+                        text = s.number.toString(),
+                        color = LocalColors.current.textOnAccent,
                         style = LocalType.current.base,
                         textAlign = TextAlign.Center
                     )
                 }
-            } else {
-                // Select OFF badge
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(LocalDimensions.current.xxsSpacing)
-                ) {
-                    IndicatorOff()
-                }
             }
         }
     }
+}
+
+private sealed interface BadgeState {
+    data object Hidden : BadgeState
+    data object Off : BadgeState
+    data class On(val number: Int) : BadgeState
 }
 
 @Composable
