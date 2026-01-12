@@ -18,7 +18,6 @@ import org.session.libsession.utilities.recipients.Recipient
 import org.session.libsession.utilities.recipients.displayName
 import org.thoughtcrime.securesms.conversation.v2.utilities.AttachmentManager
 import org.thoughtcrime.securesms.mediasend.MediaFolder
-import org.thoughtcrime.securesms.mediasend.MediaPickerFolderFragment
 import org.thoughtcrime.securesms.mediasend.MediaSendViewModel
 import org.thoughtcrime.securesms.ui.setThemedContent
 
