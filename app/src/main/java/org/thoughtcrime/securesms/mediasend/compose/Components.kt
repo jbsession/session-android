@@ -214,7 +214,7 @@ fun MediaPickerItemCell(
 
                     Text(
                         text = (selectedIndex + 1).toString(),
-                        color = LocalColors.current.text,
+                        color = Color.White,
                         style = LocalType.current.base,
                         textAlign = TextAlign.Center
                     )
