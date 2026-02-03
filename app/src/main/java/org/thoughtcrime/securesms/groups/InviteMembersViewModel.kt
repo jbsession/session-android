@@ -90,7 +90,8 @@ class InviteMembersViewModel @AssistedInject constructor(
         selected: Set<SelectedContact>,
     ): InviteContactsDialogState {
         val count = selected.size
-        val firstMember = selected.firstOrNull()
+        val sortedMembers = selected.sortedBy { it.address }
+        val firstMember = sortedMembers.firstOrNull()
 
         val body: CharSequence = when (count) {
             1 -> {
@@ -99,12 +100,11 @@ class InviteMembersViewModel @AssistedInject constructor(
                         .put(NAME_KEY, firstMember?.name)
                         .format()
                 } else {
-                    // TODO: Need to add String in Crowdin
-                    context.getString(R.string.membersInviteShareDescription)
+                    context.getString(R.string.shareGroupMessageHistory)
                 }
             }
             2 -> {
-                val secondMember = selected.elementAtOrNull(1)?.name
+                val secondMember = sortedMembers.elementAtOrNull(1)?.name
                 Phrase.from(context, R.string.membersInviteShareDescriptionTwo)
                     .put(NAME_KEY, firstMember?.name)
                     .put(OTHER_NAME_KEY, secondMember)
