@@ -15,6 +15,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.session.libsession.messaging.MessagingModuleConfiguration
 import org.session.libsession.messaging.jobs.JobQueue
+import org.session.libsession.messaging.messages.visible.VisibleMessage
+import org.session.libsession.messaging.messages.applyExpiryMode
+import org.session.libsession.messaging.messages.signal.OutgoingTextMessage
 import org.session.libsession.messaging.sending_receiving.MessageSender
 import org.session.libsession.network.SnodeClock
 import org.session.libsession.utilities.Address
@@ -25,6 +28,7 @@ import org.thoughtcrime.securesms.auth.LoginStateRepository
 import org.thoughtcrime.securesms.crypto.MnemonicUtilities
 import org.thoughtcrime.securesms.database.MmsSmsDatabase
 import org.thoughtcrime.securesms.database.RecipientRepository
+import org.thoughtcrime.securesms.database.SmsDatabase
 import org.thoughtcrime.securesms.database.Storage
 import org.thoughtcrime.securesms.database.model.MessageId
 import javax.inject.Inject
@@ -39,7 +43,7 @@ class NetworkSendTest {
         private const val NTS_MESSAGE_COUNT = 100
         private const val ONE_ON_ONE_MESSAGE_COUNT = 100
         private const val GROUP_MESSAGE_COUNT = 20
-        private const val COMMUNITY_MESSAGE_COUNT = 5
+        private const val COMMUNITY_MESSAGE_COUNT = 3
 
         // Delays
         private const val DEFAULT_DELAY_MS = 250L
@@ -63,11 +67,11 @@ class NetworkSendTest {
     @Inject lateinit var storageProvider: Provider<Storage>
     @Inject lateinit var jobQueueProvider: Provider<JobQueue>
     @Inject lateinit var mmsSmsDatabaseProvider: Provider<MmsSmsDatabase>
+    @Inject lateinit var smsDatabaseProvider: Provider<SmsDatabase>
 
     @Inject lateinit var messagingModuleConfiguration: Provider<MessagingModuleConfiguration>
 
     @Inject lateinit var recipientRepository: RecipientRepository
-//    @Inject lateinit var debugTextSendJobFactory: DebugTextSendJob.Factory
 
     // Resolved after we seed login state
     private lateinit var messageSender: MessageSender
@@ -75,6 +79,7 @@ class NetworkSendTest {
     private lateinit var storage: Storage
     private lateinit var jobQueue: JobQueue
     private lateinit var mmsSmsDb: MmsSmsDatabase
+    private lateinit var smsDb: SmsDatabase
 
     @Before fun setup() {
         // SQLCipher relies on native libraries, but the test application does not run the normal app
@@ -133,6 +138,7 @@ class NetworkSendTest {
                 }
             }
             mmsSmsDb = mmsSmsDatabaseProvider.get()
+            smsDb = smsDatabaseProvider.get()
         }
     }
 
@@ -204,33 +210,79 @@ class NetworkSendTest {
         )
     }
 
+    private suspend fun insertAndSendTextBatch(
+        threadId: Long,
+        recipient: Address,
+        count: Int,
+        delayBetweenMessagesMs: Long,
+        prefix: String,
+    ): List<MessageId> {
+        val ids = ArrayList<MessageId>(count)
+
+        repeat(count) { i ->
+            val ts = snodeClock.currentTimeMillis()
+
+            val message = VisibleMessage().applyExpiryMode(recipient).apply {
+                sentTimestamp = ts
+                text = "$prefix #${i + 1}"
+            }
+
+            val outgoing = OutgoingTextMessage(
+                message = message,
+                recipient = recipient,
+                expiresInMillis = 0,
+                expireStartedAtMillis = 0
+            )
+
+            val messageId = MessageId(
+                id = smsDb.insertMessageOutbox(
+                    threadId,
+                    outgoing,
+                    false,
+                    message.sentTimestamp!!,
+                    true
+                ),
+                mms = false
+            )
+
+            message.id = messageId
+            ids += messageId
+
+            // Enqueue the real send pipeline (MessageSendJob via JobQueue)
+            messageSender.send(message, recipient)
+
+            if (delayBetweenMessagesMs > 0) delay(delayBetweenMessagesMs)
+        }
+
+        return ids
+    }
+
     @Test fun send_real_network_repeatable_user_nts() = runBlocking {
         val recipient = Address.fromSerialized("05301f684ff55f168fcc270053788609c9a711751c5e636c4e587d804ae435a569")
 
         // ensure thread exists
         val threadId = storage.getOrCreateThreadIdFor(recipient)
 
-//        val job = debugTextSendJobFactory.create(
-//            threadId = threadId,
-//            address = recipient,
-//            count = NTS_MESSAGE_COUNT,
-//            delayBetweenMessagesMs = DEFAULT_DELAY_MS,
-//            prefix = "hello from DebugTextSendJob NTS"
-//        )
-//
-//        val messageIds = withTimeout(DEFAULT_EXECUTION_TIMEOUT_MS) {
-//            job.executeAndReturnMessageIds(dispatcherName = "instrumentation-test")
-//        }
-//
-//        val summary = awaitTerminalStates(
-//            ids = messageIds,
-//            timeoutMs = DEFAULT_AWAIT_TIMEOUT_MS,
-//            pollMs = POLL_INTERVAL_MS
-//        )
-//        println("NetworkSendTest: NTS attempted=${summary.attempted} sent=${summary.sent.size} failed=${summary.failed.size}")
-//        if (summary.failed.isNotEmpty()) {
-//            throw AssertionError("NTS failed message ids: ${summary.failed.map { it.id }}")
-//        }
+        val messageIds = withTimeout(DEFAULT_EXECUTION_TIMEOUT_MS) {
+            insertAndSendTextBatch(
+                threadId = threadId,
+                recipient = recipient,
+                count = NTS_MESSAGE_COUNT,
+                delayBetweenMessagesMs = DEFAULT_DELAY_MS,
+                prefix = "hello from NetworkSendTest NTS",
+            )
+        }
+
+        val summary = awaitTerminalStates(
+            ids = messageIds,
+            timeoutMs = DEFAULT_AWAIT_TIMEOUT_MS,
+            pollMs = POLL_INTERVAL_MS
+        )
+
+        Log.i("NetworkSendTest", "NTS attempted=${summary.attempted} sent=${summary.sent.size} failed=${summary.failed.size}")
+        if (summary.failed.isNotEmpty()) {
+            throw AssertionError("NTS failed message ids: ${summary.failed.map { it.id }}")
+        }
     }
 
     @Test fun send_real_network_repeatable_one_on_one() = runBlocking {
@@ -239,28 +291,26 @@ class NetworkSendTest {
         // ensure thread exists
         val threadId = storage.getOrCreateThreadIdFor(recipient)
 
-//        val job = debugTextSendJobFactory.create(
-//            threadId = threadId,
-//            address = recipient,
-//            count = ONE_ON_ONE_MESSAGE_COUNT,
-//            delayBetweenMessagesMs = DEFAULT_DELAY_MS,
-//            prefix = "hello from DebugTextSendJob 1:1"
-//        )
-//
-//        val messageIds = withTimeout(LONG_EXECUTION_TIMEOUT_MS) {
-//            job.executeAndReturnMessageIds(dispatcherName = "instrumentation-test-1:1")
-//        }
-//
-//        val summary = awaitTerminalStates(
-//            ids = messageIds,
-//            timeoutMs = LONG_AWAIT_TIMEOUT_MS,
-//            pollMs = POLL_INTERVAL_MS
-//        )
-//
-//        Log.i("NetworkSendTest", "1:1 attempted=${summary.attempted} sent=${summary.sent.size} failed=${summary.failed.size}")
-//        if (summary.failed.isNotEmpty()) {
-//            throw AssertionError("1:1 failed message ids: ${summary.failed.map { it.id }}")
-//        }
+        val messageIds = withTimeout(LONG_EXECUTION_TIMEOUT_MS) {
+            insertAndSendTextBatch(
+                threadId = threadId,
+                recipient = recipient,
+                count = ONE_ON_ONE_MESSAGE_COUNT,
+                delayBetweenMessagesMs = DEFAULT_DELAY_MS,
+                prefix = "hello from NetworkSendTest 1:1",
+            )
+        }
+
+        val summary = awaitTerminalStates(
+            ids = messageIds,
+            timeoutMs = LONG_AWAIT_TIMEOUT_MS,
+            pollMs = POLL_INTERVAL_MS
+        )
+
+        Log.i("NetworkSendTest", "1:1 attempted=${summary.attempted} sent=${summary.sent.size} failed=${summary.failed.size}")
+        if (summary.failed.isNotEmpty()) {
+            throw AssertionError("1:1 failed message ids: ${summary.failed.map { it.id }}")
+        }
     }
 
     @Test fun send_real_network_repeatable_group() = runBlocking {
@@ -269,28 +319,26 @@ class NetworkSendTest {
         // ensure thread exists
         val threadId = storage.getOrCreateThreadIdFor(recipient)
 
-//        val job = debugTextSendJobFactory.create(
-//            threadId = threadId,
-//            address = recipient,
-//            count = GROUP_MESSAGE_COUNT,
-//            delayBetweenMessagesMs = DEFAULT_DELAY_MS,
-//            prefix = "hello from DebugTextSendJob Group"
-//        )
-//
-//        val messageIds = withTimeout(DEFAULT_EXECUTION_TIMEOUT_MS) {
-//            job.executeAndReturnMessageIds(dispatcherName = "instrumentation-test-group")
-//        }
-//
-//        val summary = awaitTerminalStates(
-//            ids = messageIds,
-//            timeoutMs = DEFAULT_AWAIT_TIMEOUT_MS,
-//            pollMs = POLL_INTERVAL_MS
-//        )
-//
-//        Log.i("NetworkSendTest", "Group attempted=${summary.attempted} sent=${summary.sent.size} failed=${summary.failed.size}")
-//        if (summary.failed.isNotEmpty()) {
-//            throw AssertionError("Group failed message ids: ${summary.failed.map { it.id }}")
-//        }
+        val messageIds = withTimeout(LONG_EXECUTION_TIMEOUT_MS) {
+            insertAndSendTextBatch(
+                threadId = threadId,
+                recipient = recipient,
+                count = GROUP_MESSAGE_COUNT,
+                delayBetweenMessagesMs = DEFAULT_DELAY_MS,
+                prefix = "hello from NetworkSendTest Group",
+            )
+        }
+
+        val summary = awaitTerminalStates(
+            ids = messageIds,
+            timeoutMs = DEFAULT_AWAIT_TIMEOUT_MS,
+            pollMs = POLL_INTERVAL_MS
+        )
+
+        Log.i("NetworkSendTest", "Group attempted=${summary.attempted} sent=${summary.sent.size} failed=${summary.failed.size}")
+        if (summary.failed.isNotEmpty()) {
+            throw AssertionError("Group failed message ids: ${summary.failed.map { it.id }}")
+        }
     }
 
     @Test fun send_real_network_repeatable_community() = runBlocking {
@@ -299,27 +347,25 @@ class NetworkSendTest {
         // ensure thread exists
         val threadId = storage.getOrCreateThreadIdFor(recipient)
 
-//        val job = debugTextSendJobFactory.create(
-//            threadId = threadId,
-//            address = recipient,
-//            count = COMMUNITY_MESSAGE_COUNT,
-//            delayBetweenMessagesMs = DEFAULT_DELAY_MS,
-//            prefix = "test community"
-//        )
-//
-//        val messageIds = withTimeout(DEFAULT_EXECUTION_TIMEOUT_MS) {
-//            job.executeAndReturnMessageIds(dispatcherName = "instrumentation-test-open-group")
-//        }
-//
-//        val summary = awaitTerminalStates(
-//            ids = messageIds,
-//            timeoutMs = DEFAULT_AWAIT_TIMEOUT_MS,
-//            pollMs = POLL_INTERVAL_MS
-//        )
-//
-//        Log.i("NetworkSendTest", "Community attempted=${summary.attempted} sent=${summary.sent.size} failed=${summary.failed.size}")
-//        if (summary.failed.isNotEmpty()) {
-//            throw AssertionError("Community failed message ids: ${summary.failed.map { it.id }}")
-//        }
+        val messageIds = withTimeout(DEFAULT_EXECUTION_TIMEOUT_MS) {
+            insertAndSendTextBatch(
+                threadId = threadId,
+                recipient = recipient,
+                count = COMMUNITY_MESSAGE_COUNT,
+                delayBetweenMessagesMs = DEFAULT_DELAY_MS,
+                prefix = "test community",
+            )
+        }
+
+        val summary = awaitTerminalStates(
+            ids = messageIds,
+            timeoutMs = DEFAULT_AWAIT_TIMEOUT_MS,
+            pollMs = POLL_INTERVAL_MS
+        )
+
+        Log.i("NetworkSendTest", "Community attempted=${summary.attempted} sent=${summary.sent.size} failed=${summary.failed.size}")
+        if (summary.failed.isNotEmpty()) {
+            throw AssertionError("Community failed message ids: ${summary.failed.map { it.id }}")
+        }
     }
 }
