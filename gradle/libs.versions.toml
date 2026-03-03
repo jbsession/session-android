@@ -70,6 +70,8 @@ googlePlayReviewVersion = "2.0.2"
 coilVersion = "3.4.0"
 billingVersion = "8.3.0"
 autolinkVersion = "0.12.0"
+protoBufVersion = "4.33.1"
+
 
 [libraries]
 accompanist-permissions = { module = "com.google.accompanist:accompanist-permissions", version.ref = "accompanistPermissionsVersion" }
@@ -143,6 +145,7 @@ glide = { module = "com.github.bumptech.glide:glide", version.ref = "glideVersio
 glide-compose = { module = "com.github.bumptech.glide:compose", version = "1.0.0-beta01" }
 glide-ksp = { module = "com.github.bumptech.glide:ksp", version.ref = "glideVersion" }
 hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "daggerHiltVersion" }
+hilt-android-testing = {module = "com.google.dagger:hilt-android-testing", version.ref="daggerHiltVersion"}
 dagger-hilt-compiler = { module = "com.google.dagger:hilt-compiler", version.ref = "daggerHiltVersion" }
 kotlinx-coroutines-guava = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-guava", version.ref = "coroutinesVersion" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutinesVersion" }
@@ -175,6 +178,7 @@ android-billing-ktx = { module = "com.android.billingclient:billing-ktx", versio
 mockk = { module = "io.mockk:mockk", version = "1.14.9" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlinVersion" }
 autolink = { module = "org.nibor.autolink:autolink", version.ref = "autolinkVersion" }
+google-protobuf = {module = "com.google.protobuf:protobuf-java", version.ref = "protoBufVersion"}
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "gradlePluginVersion" }
