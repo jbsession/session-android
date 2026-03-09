@@ -238,6 +238,7 @@ class JobQueue @Inject constructor(
         // Message send jobs waiting for the attachment to upload
         if (job is MessageSendJob && error is MessageSendJob.AwaitingAttachmentUploadException) {
             Log.i("Loki", "Message send job waiting for attachment upload to finish (id: ${job.id}).")
+            Log.i("Loki", "MessageSendJob awaiting attachment upload. jobId=${job.id} error=${error.message}")
             return
         }
 

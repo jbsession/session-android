@@ -590,6 +590,9 @@ public class MmsSmsDatabase extends Database {
         final String table;
         final String typeColumn;
 
+        final long rawMessageId = messageId.getId();
+        final boolean isMms = messageId.isMms();
+
         if (messageId.isMms()) {
             table = MmsDatabase.TABLE_NAME;
             typeColumn = MmsDatabase.MESSAGE_BOX;
@@ -598,24 +601,39 @@ public class MmsSmsDatabase extends Database {
             typeColumn = SmsDatabase.TYPE;
         }
 
+        Log.i(TAG, "getOutgoingTerminalState: id=" + rawMessageId + " isMms=" + isMms + " table=" + table + " column=" + typeColumn);
+
         SQLiteDatabase database = getReadableDatabase();
         String sql = "SELECT " + typeColumn + " FROM " + table + " WHERE " + ID + " = ?";
         String[] args = new String[]{String.valueOf(messageId.getId())};
 
         try (Cursor cursor = database.rawQuery(sql, args)) {
-            if (cursor != null && cursor.moveToFirst()) {
-                long type = cursor.getLong(0);
-                long baseType = type & MmsSmsColumns.Types.BASE_TYPE_MASK;
+            if (cursor == null) {
+                Log.w(TAG, "getOutgoingTerminalState: null cursor for id=" + rawMessageId + " isMms=" + isMms);
+                return OutgoingTerminalState.PENDING;
+            }
 
-                if (baseType == MmsSmsColumns.Types.BASE_SENT_TYPE) {
-                    return OutgoingTerminalState.SENT;
-                } else if (baseType == MmsSmsColumns.Types.BASE_SENT_FAILED_TYPE ||
-                        baseType == MmsSmsColumns.Types.BASE_SYNC_FAILED_TYPE) {
-                    return OutgoingTerminalState.FAILED;
-                }
+            if (!cursor.moveToFirst()) {
+                Log.w(TAG, "getOutgoingTerminalState: no row found for id=" + rawMessageId + " isMms=" + isMms + " table=" + table);
+                return OutgoingTerminalState.PENDING;
+            }
+
+            long type = cursor.getLong(0);
+            long baseType = type & MmsSmsColumns.Types.BASE_TYPE_MASK;
+
+            Log.i(TAG, "getOutgoingTerminalState: id=" + rawMessageId + " isMms=" + isMms + " rawType=" + type + " baseType=" + baseType);
+
+            if (baseType == MmsSmsColumns.Types.BASE_SENT_TYPE) {
+                Log.i(TAG, "getOutgoingTerminalState: id=" + rawMessageId + " -> SENT");
+                return OutgoingTerminalState.SENT;
+            } else if (baseType == MmsSmsColumns.Types.BASE_SENT_FAILED_TYPE ||
+                    baseType == MmsSmsColumns.Types.BASE_SYNC_FAILED_TYPE) {
+                Log.i(TAG, "getOutgoingTerminalState: id=" + rawMessageId + " -> FAILED");
+                return OutgoingTerminalState.FAILED;
             }
         }
 
+        Log.i(TAG, "getOutgoingTerminalState: id=" + rawMessageId + " -> PENDING");
         return OutgoingTerminalState.PENDING;
     }
 
