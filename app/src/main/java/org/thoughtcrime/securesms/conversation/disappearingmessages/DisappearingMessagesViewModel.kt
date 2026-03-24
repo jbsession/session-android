@@ -11,6 +11,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -29,7 +30,6 @@ import org.thoughtcrime.securesms.ui.UINavigator
 @HiltViewModel(assistedFactory = DisappearingMessagesViewModel.Factory::class)
 class DisappearingMessagesViewModel @AssistedInject constructor(
     @Assisted private val address: Address,
-    @Assisted("isNewConfigEnabled")  private val isNewConfigEnabled: Boolean,
     @Assisted("showDebugOptions")    private val showDebugOptions: Boolean,
     @Assisted private val navigator: UINavigator<ConversationV3Destination>,
     @param:ApplicationContext private val context: Context,
@@ -39,13 +39,13 @@ class DisappearingMessagesViewModel @AssistedInject constructor(
 
     private val _state = MutableStateFlow(
         State(
-            isNewConfigEnabled = isNewConfigEnabled,
+            isNewConfigEnabled = true,
             showDebugOptions = showDebugOptions
         )
     )
-    val state = _state.asStateFlow()
+    val state: StateFlow<State> = _state.asStateFlow()
 
-    val uiState = _state
+    val uiState: StateFlow<UiState> = _state
         .map(State::toUiState)
         .stateIn(viewModelScope, SharingStarted.Eagerly, UiState())
 
@@ -95,7 +95,6 @@ class DisappearingMessagesViewModel @AssistedInject constructor(
     interface Factory {
         fun create(
             address: Address,
-            @Assisted("isNewConfigEnabled") isNewConfigEnabled: Boolean,
             @Assisted("showDebugOptions")   showDebugOptions: Boolean,
             navigator: UINavigator<ConversationV3Destination>
         ): DisappearingMessagesViewModel

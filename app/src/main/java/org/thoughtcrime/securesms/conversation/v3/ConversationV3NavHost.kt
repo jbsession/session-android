@@ -21,15 +21,11 @@ import androidx.navigation.toRoute
 import kotlinx.parcelize.Parcelize
 import kotlinx.serialization.Serializable
 import network.loki.messenger.BuildConfig
-import org.session.libsession.messaging.messages.ExpirationConfiguration
 import org.session.libsession.utilities.Address
+import org.session.libsession.utilities.Address.Companion.toConversableAddress
 import org.session.libsignal.utilities.AccountId
 import org.thoughtcrime.securesms.conversation.disappearingmessages.DisappearingMessagesViewModel
 import org.thoughtcrime.securesms.conversation.disappearingmessages.ui.DisappearingMessagesScreen
-import org.thoughtcrime.securesms.conversation.v3.settings.ConversationSettingsScreen
-import org.thoughtcrime.securesms.conversation.v3.settings.ConversationSettingsViewModel
-import org.thoughtcrime.securesms.conversation.v3.settings.notification.NotificationSettingsScreen
-import org.thoughtcrime.securesms.conversation.v3.settings.notification.NotificationSettingsViewModel
 import org.thoughtcrime.securesms.conversation.v3.ConversationV3Destination.RouteAllMedia
 import org.thoughtcrime.securesms.conversation.v3.ConversationV3Destination.RouteConversation
 import org.thoughtcrime.securesms.conversation.v3.ConversationV3Destination.RouteConversationSettings
@@ -43,6 +39,10 @@ import org.thoughtcrime.securesms.conversation.v3.ConversationV3Destination.Rout
 import org.thoughtcrime.securesms.conversation.v3.ConversationV3Destination.RouteNotifications
 import org.thoughtcrime.securesms.conversation.v3.ConversationV3Destination.RoutePromoteMembers
 import org.thoughtcrime.securesms.conversation.v3.compose.conversation.ConversationScreen
+import org.thoughtcrime.securesms.conversation.v3.settings.ConversationSettingsScreen
+import org.thoughtcrime.securesms.conversation.v3.settings.ConversationSettingsViewModel
+import org.thoughtcrime.securesms.conversation.v3.settings.notification.NotificationSettingsScreen
+import org.thoughtcrime.securesms.conversation.v3.settings.notification.NotificationSettingsViewModel
 import org.thoughtcrime.securesms.groups.GroupMembersViewModel
 import org.thoughtcrime.securesms.groups.InviteMembersViewModel
 import org.thoughtcrime.securesms.groups.ManageGroupAdminsViewModel
@@ -58,22 +58,38 @@ import org.thoughtcrime.securesms.home.startconversation.newmessage.NewMessageVi
 import org.thoughtcrime.securesms.home.startconversation.newmessage.State
 import org.thoughtcrime.securesms.media.MediaOverviewScreen
 import org.thoughtcrime.securesms.media.MediaOverviewViewModel
+import org.thoughtcrime.securesms.database.model.MessageId
 import org.thoughtcrime.securesms.ui.NavigationAction
 import org.thoughtcrime.securesms.ui.ObserveAsEvents
 import org.thoughtcrime.securesms.ui.UINavigator
 import org.thoughtcrime.securesms.ui.handleIntent
 import org.thoughtcrime.securesms.ui.horizontalSlideComposable
 
+private fun String.toConversableAddress(): Address.Conversable =
+    Address.fromSerialized(this) as? Address.Conversable
+        ?: error("Expected a conversable address but got: $this")
+
 // Destinations
 sealed interface ConversationV3Destination: Parcelable {
     @Serializable
     @Parcelize
-    data object RouteConversation: ConversationV3Destination
+    data class RouteConversation private constructor(
+        private val serializedAddress: String
+    ): ConversationV3Destination {
+        constructor(address: Address.Conversable): this(address.address)
 
+        val address: Address.Conversable get() = serializedAddress.toConversableAddress()
+    }
 
     @Serializable
     @Parcelize
-    data object RouteConversationSettings: ConversationV3Destination
+    data class RouteConversationSettings private constructor(
+        private val serializedAddress: String
+    ): ConversationV3Destination {
+        constructor(address: Address.Conversable): this(address.address)
+
+        val address: Address.Conversable get() = serializedAddress.toConversableAddress()
+    }
 
     @Serializable
     @Parcelize
@@ -133,15 +149,33 @@ sealed interface ConversationV3Destination: Parcelable {
 
     @Serializable
     @Parcelize
-    data object RouteDisappearingMessages: ConversationV3Destination
+    data class RouteDisappearingMessages private constructor(
+        private val serializedAddress: String
+    ): ConversationV3Destination {
+        constructor(address: Address.Conversable): this(address.address)
+
+        val address: Address.Conversable get() = serializedAddress.toConversableAddress()
+    }
 
     @Serializable
     @Parcelize
-    data object RouteAllMedia: ConversationV3Destination
+    data class RouteAllMedia private constructor(
+        private val serializedAddress: String
+    ): ConversationV3Destination {
+        constructor(address: Address.Conversable): this(address.address)
+
+        val address: Address.Conversable get() = serializedAddress.toConversableAddress()
+    }
 
     @Serializable
     @Parcelize
-    data object RouteNotifications: ConversationV3Destination
+    data class RouteNotifications private constructor(
+        private val serializedAddress: String
+    ): ConversationV3Destination {
+        constructor(address: Address.Conversable): this(address.address)
+
+        val address: Address.Conversable get() = serializedAddress.toConversableAddress()
+    }
 
     @Serializable
     @Parcelize
@@ -166,9 +200,11 @@ sealed interface ConversationV3Destination: Parcelable {
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun ConversationV3NavHost(
-    address: Address.Conversable,
-    startDestination: ConversationV3Destination = RouteConversation,
-    switchConvoVersion: () -> Unit,
+    initialAddress: Address.Conversable,
+    startDestination: ConversationV3Destination = RouteConversation(initialAddress),
+    pendingScrollMessageId: MessageId? = null,
+    onPendingScrollConsumed: () -> Unit = {},
+    switchConvoVersion: (Address.Conversable) -> Unit,
     onBack: () -> Unit
 ){
     SharedTransitionLayout {
@@ -203,24 +239,42 @@ fun ConversationV3NavHost(
 
         NavHost(navController = navController, startDestination = startDestination) {
             // Main conversation screen
-            horizontalSlideComposable<RouteConversation> {
+            horizontalSlideComposable<RouteConversation> { backStackEntry ->
+                val data: RouteConversation = backStackEntry.toRoute()
+
                 val viewModel =
                     hiltViewModel<ConversationV3ViewModel, ConversationV3ViewModel.Factory> { factory ->
-                        factory.create(address, navigator)
+                        factory.create(data.address, navigator)
                     }
+
+                LaunchedEffect(pendingScrollMessageId) {
+                    pendingScrollMessageId ?: return@LaunchedEffect
+
+                    viewModel.onCommand(
+                        ConversationCommand.ScrollToMessage(
+                            messageId = pendingScrollMessageId,
+                            smoothScroll = false,
+                            highlight = true,
+                        )
+                    )
+                    onPendingScrollConsumed()
+                }
 
                 ConversationScreen(
                     viewModel = viewModel,
-                    switchConvoVersion = switchConvoVersion,
+                    address = data.address,
+                    switchConvoVersion = { switchConvoVersion(data.address) },
                     onBack = onBack,
                 )
             }
 
             // Conversation Settings
-            horizontalSlideComposable<RouteConversationSettings> {
+            horizontalSlideComposable<RouteConversationSettings> { backStackEntry ->
+                val data: RouteConversationSettings = backStackEntry.toRoute()
+
                 val viewModel =
                     hiltViewModel<ConversationSettingsViewModel, ConversationSettingsViewModel.Factory> { factory ->
-                        factory.create(address, navigator)
+                        factory.create(data.address, navigator)
                     }
 
                 val lifecycleOwner = LocalLifecycleOwner.current
@@ -298,7 +352,7 @@ fun ConversationV3NavHost(
                     hiltViewModel<InviteMembersViewModel, InviteMembersViewModel.Factory> { factory ->
                         factory.create(
                             groupAddress = data.groupAddress,
-                            excludingAccountIDs = data.excludingAccountIDs.map(Address::fromSerialized).toSet()
+                            excludingAccountIDs = data.excludingAccountIDs.map { it.toConversableAddress() }.toSet()
                         )
                     }
 
@@ -333,9 +387,7 @@ fun ConversationV3NavHost(
 
                 // grab a hold of settings' VM
                 val parentEntry = remember(backStackEntry) {
-                    navController.getBackStackEntry(
-                        RouteConversationSettings
-                    )
+                    navController.previousBackStackEntry ?: error("RouteConversationSettings not in backstack")
                 }
                 val settingsViewModel: ConversationSettingsViewModel = hiltViewModel(parentEntry)
 
@@ -364,11 +416,14 @@ fun ConversationV3NavHost(
                     hiltViewModel<InviteMembersViewModel, InviteMembersViewModel.Factory> { factory ->
                         factory.create(
                             groupAddress = data.groupAddress,
-                            excludingAccountIDs = data.excludingAccountIDs.map(Address::fromSerialized).toSet()
+                            excludingAccountIDs = data.excludingAccountIDs.map { it.toConversableAddress() }.toSet()
                         )
                     }
 
-                val newMessageViewModel = hiltViewModel<NewMessageViewModel>()
+                val newMessageViewModel = hiltViewModel<NewMessageViewModel, NewMessageViewModel.Factory>{ factory ->
+                    factory.create(allowCommunityUrl = false)
+                }
+
                 val uiState by newMessageViewModel.state.collectAsState(State())
 
                 // grab a hold of manage group's VM
@@ -439,12 +494,13 @@ fun ConversationV3NavHost(
             }
 
             // Disappearing Messages
-            horizontalSlideComposable<RouteDisappearingMessages> {
+            horizontalSlideComposable<RouteDisappearingMessages> { backStackEntry ->
+                val data: RouteDisappearingMessages = backStackEntry.toRoute()
+
                 val viewModel: DisappearingMessagesViewModel =
                     hiltViewModel<DisappearingMessagesViewModel, DisappearingMessagesViewModel.Factory> { factory ->
                         factory.create(
-                            address = address,
-                            isNewConfigEnabled = ExpirationConfiguration.isNewConfigEnabled,
+                            address = data.address,
                             showDebugOptions = BuildConfig.BUILD_TYPE != "release",
                             navigator = navigator
                         )
@@ -459,10 +515,12 @@ fun ConversationV3NavHost(
             }
 
             // All Media
-            horizontalSlideComposable<RouteAllMedia> {
+            horizontalSlideComposable<RouteAllMedia> { backStackEntry ->
+                val data: RouteAllMedia = backStackEntry.toRoute()
+
                 val viewModel =
                     hiltViewModel<MediaOverviewViewModel, MediaOverviewViewModel.Factory> { factory ->
-                        factory.create(address)
+                        factory.create(data.address)
                     }
 
                 MediaOverviewScreen(
@@ -474,10 +532,12 @@ fun ConversationV3NavHost(
             }
 
             // Notifications
-            horizontalSlideComposable<RouteNotifications> {
+            horizontalSlideComposable<RouteNotifications> { backStackEntry ->
+                val data: RouteNotifications = backStackEntry.toRoute()
+
                 val viewModel =
                     hiltViewModel<NotificationSettingsViewModel, NotificationSettingsViewModel.Factory> { factory ->
-                        factory.create(address)
+                        factory.create(data.address)
                     }
 
                 NotificationSettingsScreen(

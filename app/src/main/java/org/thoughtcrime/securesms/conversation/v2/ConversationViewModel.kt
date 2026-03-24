@@ -94,26 +94,31 @@ import org.session.libsignal.utilities.IdPrefix
 import org.session.libsignal.utilities.Log
 import org.thoughtcrime.securesms.InputbarViewModel
 import org.thoughtcrime.securesms.audio.AudioPlaybackManager
+import org.thoughtcrime.securesms.audio.model.AudioPlaybackState
 import org.thoughtcrime.securesms.auth.LoginStateRepository
 import org.thoughtcrime.securesms.database.AttachmentDatabase
 import org.thoughtcrime.securesms.database.BlindMappingRepository
 import org.thoughtcrime.securesms.database.GroupDatabase
 import org.thoughtcrime.securesms.database.LokiMessageDatabase
+import org.thoughtcrime.securesms.database.MmsDatabase
 import org.thoughtcrime.securesms.database.ReactionDatabase
 import org.thoughtcrime.securesms.database.RecipientRepository
 import org.thoughtcrime.securesms.database.RecipientSettingsDatabase
+import org.thoughtcrime.securesms.database.SmsDatabase
 import org.thoughtcrime.securesms.database.ThreadDatabase
 import org.thoughtcrime.securesms.database.model.GroupThreadStatus
 import org.thoughtcrime.securesms.database.model.MessageId
 import org.thoughtcrime.securesms.database.model.MessageRecord
 import org.thoughtcrime.securesms.database.model.MmsMessageRecord
+import org.thoughtcrime.securesms.links.LinkChecker
+import org.thoughtcrime.securesms.links.LinkType
 import org.thoughtcrime.securesms.database.model.NotifyType
 import org.thoughtcrime.securesms.dependencies.ConfigFactory
 import org.thoughtcrime.securesms.groups.ExpiredGroupManager
 import org.thoughtcrime.securesms.groups.OpenGroupManager
 import org.thoughtcrime.securesms.pro.ProStatusManager
 import org.thoughtcrime.securesms.repository.ConversationRepository
-import org.thoughtcrime.securesms.ui.SimpleDialogData
+import org.thoughtcrime.securesms.ui.dialog.SimpleDialogData
 import org.thoughtcrime.securesms.ui.components.ConversationAppBarData
 import org.thoughtcrime.securesms.ui.components.ConversationAppBarPagerData
 import org.thoughtcrime.securesms.ui.getSubbedString
@@ -150,6 +155,8 @@ class ConversationViewModel @AssistedInject constructor(
     private val configFactory: ConfigFactory,
     private val groupManagerV2: GroupManagerV2,
     private val callManager: CallManager,
+    private val mmsDatabase: MmsDatabase,
+    private val smsDatabase: SmsDatabase,
     val legacyGroupDeprecationManager: LegacyGroupDeprecationManager,
     val dateUtils: DateUtils,
     expiredGroupManager: ExpiredGroupManager,
@@ -162,6 +169,7 @@ class ConversationViewModel @AssistedInject constructor(
     private val upmFactory: UserProfileUtils.UserProfileUtilsFactory,
     attachmentDownloadHandlerFactory: AttachmentDownloadHandler.Factory,
     private val openGroupManager: OpenGroupManager,
+    private val linkChecker: LinkChecker,
     private val attachmentDownloadJobFactory: AttachmentDownloadJob.Factory,
     private val communityApiExecutor: CommunityApiExecutor,
     private val deleteAllReactionsApiFactory: DeleteAllReactionsApi.Factory,
@@ -169,7 +177,7 @@ class ConversationViewModel @AssistedInject constructor(
     private val loginStateRepository: LoginStateRepository,
     private val jobQueue: Provider<JobQueue>,
 ) : InputbarViewModel(
-    application = application,
+    context = application,
     proStatusManager = proStatusManager,
     recipientRepository = recipientRepository,
 ) {
@@ -183,12 +191,13 @@ class ConversationViewModel @AssistedInject constructor(
     private val _dialogsState = MutableStateFlow(DialogsState())
     val dialogsState: StateFlow<DialogsState> = _dialogsState
 
-    val audioPlaybackState = audioPlaybackManager.playbackState
+    val audioPlaybackState: StateFlow<AudioPlaybackState> = audioPlaybackManager.playbackState
+
 
     val threadIdFlow: StateFlow<Long?> =
         storage.getThreadId(address)
             ?.let { MutableStateFlow(it) }
-            ?: threadDb.updateNotifications
+            ?: threadDb.changeNotification
                 .map { storage.getThreadId(address) }
                 .flowOn(Dispatchers.Default)
                 .filterNotNull()
@@ -211,10 +220,20 @@ class ConversationViewModel @AssistedInject constructor(
     val conversationReloadNotification: SharedFlow<*> = merge(
         threadIdFlow
             .filterNotNull()
-            .flatMapLatest { id -> threadDb.updateNotifications.filter { it == id } },
+            .flatMapLatest { threadId ->
+                merge(
+                    merge(
+                        mmsDatabase.changeNotification,
+                        smsDatabase.changeNotification
+                    ).filter { it.threadId == threadId },
+
+                    threadDb.changeNotification.filter { it.id == threadId }
+                )
+           },
         recipientSettingsDatabase.changeNotification.filter { it == address },
         attachmentDatabase.changesNotification,
         reactionDb.changeNotification,
+
     ).debounce(200L) // debounce to avoid too many reloads
         .shareIn(viewModelScope, SharingStarted.Eagerly, replay = 1)
 
@@ -1207,18 +1226,36 @@ class ConversationViewModel @AssistedInject constructor(
     }
 
     fun confirmCommunityJoin(communityName: String, communityUrl: String){
-        _dialogsState.update {
-            it.copy(
-                joinCommunity = JoinCommunityDialogData(
-                    communityName = communityName,
-                    communityUrl = communityUrl
-                )
+        viewModelScope.launch {
+            val detectedLink = linkChecker.check(communityUrl) as? LinkType.CommunityLink
+            val resolvedName = communityName.takeIf { it.isNotBlank() } ?: detectedLink?.name ?: communityUrl
+            val link = detectedLink?.copy(
+                name = resolvedName,
+            ) ?: LinkType.CommunityLink(
+                url = communityUrl,
+                name = resolvedName,
+                joined = false,
+                displayType = LinkType.CommunityLink.DisplayType.CONVERSATION
             )
+
+            _dialogsState.update {
+                it.copy(
+                    urlDialog = link,
+                )
+            }
         }
     }
 
-    private fun joinCommunity(url: String){
-        val openGroup = OpenGroupUrlParser.parseUrl(url)
+    private fun openOrJoinCommunity(url: String){
+        val openGroup = try {
+            OpenGroupUrlParser.parseUrl(url)
+        } catch (_: OpenGroupUrlParser.Error) {
+            Toast.makeText(application, R.string.communityEnterUrlErrorInvalidDescription, Toast.LENGTH_SHORT)
+                .show()
+            return
+        }
+
+        _dialogsState.update { it.copy(urlDialog = null) }
 
         viewModelScope.launch {
             try {
@@ -1227,12 +1264,27 @@ class ConversationViewModel @AssistedInject constructor(
                     room = openGroup.room,
                     publicKey = openGroup.serverPublicKey,
                 )
+
+                // after joining or if already joined, open the conversation
+                _uiEvents.tryEmit(ConversationUiEvent.NavigateToConversation(
+                    address = Address.Community(openGroup.server, openGroup.room),
+                ))
             } catch (e: Exception) {
                 Log.e("", "Error joining community", e)
                 withContext(Dispatchers.Main) {
                     Toast.makeText(application, R.string.communityErrorDescription, Toast.LENGTH_SHORT)
                         .show()
                 }
+            }
+        }
+    }
+
+    private fun handleLink(url: String) {
+        viewModelScope.launch {
+            _dialogsState.update {
+                it.copy(
+                    urlDialog = linkChecker.check(url),
+                )
             }
         }
     }
@@ -1256,9 +1308,13 @@ class ConversationViewModel @AssistedInject constructor(
 
     fun onCommand(command: Commands) {
         when (command) {
-            is Commands.ShowOpenUrlDialog -> {
+            is Commands.HandleLink -> {
+                handleLink(command.url)
+            }
+
+            Commands.HideOpenUrlDialog -> {
                 _dialogsState.update {
-                    it.copy(openLinkDialogUrl = command.url)
+                    it.copy(urlDialog = null)
                 }
             }
 
@@ -1330,14 +1386,14 @@ class ConversationViewModel @AssistedInject constructor(
                 userProfileModalUtils?.onCommand(command.upmCommand)
             }
 
-            is Commands.JoinCommunity -> {
-                joinCommunity(command.url)
+            is Commands.OpenOrJoinCommunity -> {
+                openOrJoinCommunity(command.url)
             }
 
             is Commands.HideJoinCommunityDialog -> {
                 _dialogsState.update {
                     it.copy(
-                        joinCommunity = null
+                        urlDialog = null
                     )
                 }
             }
@@ -1563,19 +1619,13 @@ class ConversationViewModel @AssistedInject constructor(
 
     data class DialogsState(
         val showSimpleDialog: SimpleDialogData? = null,
-        val openLinkDialogUrl: String? = null,
         val clearAllEmoji: ClearAllEmoji? = null,
         val deleteEveryone: DeleteForEveryoneDialogData? = null,
         val recreateGroupConfirm: Boolean = false,
         val recreateGroupData: RecreateGroupDialogData? = null,
         val userProfileModal: UserProfileModalData? = null,
-        val joinCommunity: JoinCommunityDialogData? = null,
+        val urlDialog: LinkType? = null,
         val attachmentDownload: ConfirmAttachmentDownloadDialogData? = null
-    )
-
-    data class JoinCommunityDialogData(
-        val communityName: String,
-        val communityUrl: String
     )
 
     data class ConfirmAttachmentDownloadDialogData(
@@ -1602,7 +1652,8 @@ class ConversationViewModel @AssistedInject constructor(
     )
 
     sealed interface Commands {
-        data class ShowOpenUrlDialog(val url: String?) : Commands
+        data class HandleLink(val url: String) : Commands
+        data object HideOpenUrlDialog : Commands
 
         data class ClearEmoji(val emoji:String, val messageId: MessageId) : Commands
 
@@ -1623,7 +1674,7 @@ class ConversationViewModel @AssistedInject constructor(
             val upmCommand: UserProfileModalCommands
         ): Commands
 
-        data class JoinCommunity(val url: String): Commands
+        data class OpenOrJoinCommunity(val url: String): Commands
         data object HideJoinCommunityDialog: Commands
 
         data class DownloadAttachments(val attachment: DatabaseAttachment): Commands

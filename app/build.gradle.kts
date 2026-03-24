@@ -26,8 +26,8 @@ configurations.configureEach {
     exclude(module = "commons-logging")
 }
 
-val canonicalVersionCode = 444
-val canonicalVersionName = "1.32.1"
+val canonicalVersionCode = 445
+val canonicalVersionName = "1.32.2"
 
 val postFixSize = 10
 val abiPostFix = mapOf(
@@ -407,6 +407,7 @@ dependencies {
     implementation(libs.glide.compose)
     implementation(libs.coil.compose)
     implementation(libs.coil.gif)
+    implementation(libs.coil.video)
     implementation(libs.android.image.cropper)
     implementation(libs.subsampling.scale.image.view) {
         exclude(group = "com.android.support", module = "support-annotations")
@@ -419,6 +420,7 @@ dependencies {
     implementation(libs.copper.flow)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.guava)
+    implementation(libs.kotlinx.collections.immutable)
     implementation(libs.opencsv)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.rxbinding)

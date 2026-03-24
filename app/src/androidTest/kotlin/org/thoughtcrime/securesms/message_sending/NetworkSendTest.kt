@@ -254,7 +254,6 @@ class NetworkSendTest {
                     outgoing,
                     false,
                     message.sentTimestamp!!,
-                    true
                 ),
                 mms = false
             )
@@ -362,7 +361,6 @@ class NetworkSendTest {
                 threadId,
                 false,
                 0,
-                true,
             ),
             mms = true,
         )
