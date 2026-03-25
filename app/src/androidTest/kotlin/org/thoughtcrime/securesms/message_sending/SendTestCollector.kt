@@ -1,5 +1,6 @@
 package org.thoughtcrime.securesms.message_sending
 
+import org.session.libsession.messaging.sending_receiving.SendTestEventCollector
 import org.thoughtcrime.securesms.database.model.MessageId
 import java.util.concurrent.ConcurrentHashMap
 

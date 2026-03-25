@@ -6,6 +6,7 @@ import kotlinx.coroutines.channels.Channel.Factory.UNLIMITED
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import org.session.libsession.messaging.sending_receiving.SendTestHooks
 import org.session.libsignal.utilities.Log
 import org.thoughtcrime.securesms.database.Storage
 import org.thoughtcrime.securesms.dependencies.ManagerScope
@@ -246,6 +247,15 @@ class JobQueue @Inject constructor(
             storage.persistJob(job)
             val retryInterval = getRetryInterval(job)
             Log.i("Loki", "${job::class.simpleName} failed (id: ${job.id}); scheduling retry (failure count is ${job.failureCount}).")
+            if (job is MessageSendJob) {
+                job.message.id?.let { messageId ->
+                    SendTestHooks.collector?.onRetry(
+                        messageId = messageId,
+                        error = error,
+                        failureCount = job.failureCount,
+                    )
+                }
+            }
             scope.launch {
                 delay(retryInterval)
                 Log.i("Loki", "Retrying ${job::class.simpleName} (id: ${job.id}).")

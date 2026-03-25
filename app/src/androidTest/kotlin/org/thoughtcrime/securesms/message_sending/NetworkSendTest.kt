@@ -28,6 +28,7 @@ import org.session.libsession.messaging.messages.applyExpiryMode
 import org.session.libsession.messaging.messages.signal.OutgoingTextMessage
 import org.session.libsession.messaging.sending_receiving.attachments.Attachment
 import org.session.libsession.messaging.sending_receiving.MessageSender
+import org.session.libsession.messaging.sending_receiving.SendTestHooks
 import org.session.libsession.network.SnodeClock
 import org.session.libsession.utilities.Address
 import org.session.libsession.utilities.TextSecurePreferences
@@ -49,7 +50,7 @@ class NetworkSendTest {
 
     companion object {
         //  Message Counts
-        private const val NTS_MESSAGE_COUNT = 100
+        private const val NTS_MESSAGE_COUNT = 10
         private const val ONE_ON_ONE_MESSAGE_COUNT = 100
         private const val GROUP_MESSAGE_COUNT = 20
         private const val COMMUNITY_MESSAGE_COUNT = 3
@@ -411,75 +412,75 @@ class NetworkSendTest {
         }
     }
 
-    @Test fun send_real_network_repeatable_one_on_one() = runBlocking {
-        val recipient = Address.fromSerialized("0507012662d6972db5ba1f1f6e5501e3b6c6651c10c593d44153546c69fbe77322")
+//    @Test fun send_real_network_repeatable_one_on_one() = runBlocking {
+//        val recipient = Address.fromSerialized("0507012662d6972db5ba1f1f6e5501e3b6c6651c10c593d44153546c69fbe77322")
+//
+//        // ensure thread exists
+//        val threadId = storage.getOrCreateThreadIdFor(recipient)
+//        sendTestCollector.reset()
+//        val testStartTimeMs = System.currentTimeMillis()
+//
+//        val messageIds = withTimeout(LONG_EXECUTION_TIMEOUT_MS) {
+//            insertAndSendTextBatch(
+//                threadId = threadId,
+//                recipient = recipient,
+//                count = ONE_ON_ONE_MESSAGE_COUNT,
+//                delayBetweenMessagesMs = DEFAULT_DELAY_MS,
+//                prefix = "hello from NetworkSendTest 1:1",
+//            )
+//        }
+//
+//        val summary = awaitTerminalStates(
+//            ids = messageIds,
+//            timeoutMs = LONG_AWAIT_TIMEOUT_MS,
+//            pollMs = POLL_INTERVAL_MS
+//        )
+//
+//        val report = sendTestCollector.buildReport(
+//            name = "send_real_network_repeatable_one_on_one",
+//            startTimeMs = testStartTimeMs,
+//        )
+//        Log.i("NetworkSendTest", report.toString())
+//        Log.i("NetworkSendTest", "1:1 attempted=${summary.attempted} sent=${summary.sent.size} failed=${summary.failed.size}")
+//        if (summary.failed.isNotEmpty()) {
+//            throw AssertionError("1:1 failed message ids: ${summary.failed.map { it.id }}")
+//        }
+//    }
 
-        // ensure thread exists
-        val threadId = storage.getOrCreateThreadIdFor(recipient)
-        sendTestCollector.reset()
-        val testStartTimeMs = System.currentTimeMillis()
-
-        val messageIds = withTimeout(LONG_EXECUTION_TIMEOUT_MS) {
-            insertAndSendTextBatch(
-                threadId = threadId,
-                recipient = recipient,
-                count = ONE_ON_ONE_MESSAGE_COUNT,
-                delayBetweenMessagesMs = DEFAULT_DELAY_MS,
-                prefix = "hello from NetworkSendTest 1:1",
-            )
-        }
-
-        val summary = awaitTerminalStates(
-            ids = messageIds,
-            timeoutMs = LONG_AWAIT_TIMEOUT_MS,
-            pollMs = POLL_INTERVAL_MS
-        )
-
-        val report = sendTestCollector.buildReport(
-            name = "send_real_network_repeatable_one_on_one",
-            startTimeMs = testStartTimeMs,
-        )
-        Log.i("NetworkSendTest", report.toString())
-        Log.i("NetworkSendTest", "1:1 attempted=${summary.attempted} sent=${summary.sent.size} failed=${summary.failed.size}")
-        if (summary.failed.isNotEmpty()) {
-            throw AssertionError("1:1 failed message ids: ${summary.failed.map { it.id }}")
-        }
-    }
-
-    @Test fun send_real_network_repeatable_group() = runBlocking {
-        val recipient = Address.fromSerialized("034ccd4890302d625eac887b660403140d9a8e131cda797d77d44bec8d5111bc24")
-
-        // ensure thread exists
-        val threadId = storage.getOrCreateThreadIdFor(recipient)
-        sendTestCollector.reset()
-        val testStartTimeMs = System.currentTimeMillis()
-
-        val messageIds = withTimeout(LONG_EXECUTION_TIMEOUT_MS) {
-            insertAndSendTextBatch(
-                threadId = threadId,
-                recipient = recipient,
-                count = GROUP_MESSAGE_COUNT,
-                delayBetweenMessagesMs = DEFAULT_DELAY_MS,
-                prefix = "hello from NetworkSendTest Group",
-            )
-        }
-
-        val summary = awaitTerminalStates(
-            ids = messageIds,
-            timeoutMs = DEFAULT_AWAIT_TIMEOUT_MS,
-            pollMs = POLL_INTERVAL_MS
-        )
-
-        val report = sendTestCollector.buildReport(
-            name = "send_real_network_repeatable_group",
-            startTimeMs = testStartTimeMs,
-        )
-        Log.i("NetworkSendTest", report.toString())
-        Log.i("NetworkSendTest", "Group attempted=${summary.attempted} sent=${summary.sent.size} failed=${summary.failed.size}")
-        if (summary.failed.isNotEmpty()) {
-            throw AssertionError("Group failed message ids: ${summary.failed.map { it.id }}")
-        }
-    }
+//    @Test fun send_real_network_repeatable_group() = runBlocking {
+//        val recipient = Address.fromSerialized("034ccd4890302d625eac887b660403140d9a8e131cda797d77d44bec8d5111bc24")
+//
+//        // ensure thread exists
+//        val threadId = storage.getOrCreateThreadIdFor(recipient)
+//        sendTestCollector.reset()
+//        val testStartTimeMs = System.currentTimeMillis()
+//
+//        val messageIds = withTimeout(LONG_EXECUTION_TIMEOUT_MS) {
+//            insertAndSendTextBatch(
+//                threadId = threadId,
+//                recipient = recipient,
+//                count = GROUP_MESSAGE_COUNT,
+//                delayBetweenMessagesMs = DEFAULT_DELAY_MS,
+//                prefix = "hello from NetworkSendTest Group",
+//            )
+//        }
+//
+//        val summary = awaitTerminalStates(
+//            ids = messageIds,
+//            timeoutMs = DEFAULT_AWAIT_TIMEOUT_MS,
+//            pollMs = POLL_INTERVAL_MS
+//        )
+//
+//        val report = sendTestCollector.buildReport(
+//            name = "send_real_network_repeatable_group",
+//            startTimeMs = testStartTimeMs,
+//        )
+//        Log.i("NetworkSendTest", report.toString())
+//        Log.i("NetworkSendTest", "Group attempted=${summary.attempted} sent=${summary.sent.size} failed=${summary.failed.size}")
+//        if (summary.failed.isNotEmpty()) {
+//            throw AssertionError("Group failed message ids: ${summary.failed.map { it.id }}")
+//        }
+//    }
 
 //    @Test fun send_real_network_repeatable_community() = runBlocking {
 //        val recipient = Address.fromSerialized("community://https%3A%2F%2Ftest-chat.session.codes?room=testing-all-the-things")

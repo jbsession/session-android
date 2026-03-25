@@ -1,4 +1,4 @@
-package org.thoughtcrime.securesms.message_sending
+package org.session.libsession.messaging.sending_receiving
 
 import org.thoughtcrime.securesms.database.model.MessageId
 

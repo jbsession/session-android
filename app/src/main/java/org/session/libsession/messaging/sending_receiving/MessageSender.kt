@@ -484,6 +484,7 @@ class MessageSender @Inject constructor(
 
             // Mark the message as sent.
             storage.markAsSent(messageId)
+            SendTestHooks.collector?.onSuccess(messageId)
 
             // Update the message sent timestamp
             storage.updateSentTimestamp(messageId, message.sentTimestamp!!)
@@ -522,6 +523,7 @@ class MessageSender @Inject constructor(
 
         if (isSyncMessage) storage.markAsSyncFailed(messageId, error)
         else storage.markAsSentFailed(messageId, error)
+        SendTestHooks.collector?.onFailure(messageId, error)
     }
 
     // Convenience
