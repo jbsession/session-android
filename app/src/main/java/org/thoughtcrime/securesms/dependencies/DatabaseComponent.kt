@@ -6,7 +6,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import org.session.libsession.database.MessageDataProvider
 import org.session.libsession.database.StorageProtocol
-import org.thoughtcrime.securesms.ApplicationContext
+import dagger.hilt.EntryPoints
 import org.thoughtcrime.securesms.database.*
 import org.thoughtcrime.securesms.database.MmsSmsDatabase
 import org.thoughtcrime.securesms.database.helpers.SQLCipherOpenHelper
@@ -18,7 +18,12 @@ interface DatabaseComponent {
     companion object {
         @JvmStatic
         @Deprecated("Use Hilt to inject your dependencies instead")
-        fun get(context: Context) = ApplicationContext.getInstance(context).databaseComponent
+        fun get(context: Context): DatabaseComponent {
+            return EntryPoints.get(
+                context.applicationContext,
+                DatabaseComponent::class.java,
+            )
+        }
     }
 
     fun openHelper(): SQLCipherOpenHelper
