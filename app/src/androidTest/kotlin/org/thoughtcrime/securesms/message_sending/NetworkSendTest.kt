@@ -17,6 +17,7 @@ import dagger.hilt.android.testing.HiltAndroidTest
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
+import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -51,7 +52,7 @@ class NetworkSendTest {
     companion object {
         //  Message Counts
         private const val NTS_MESSAGE_COUNT = 10
-        private const val ONE_ON_ONE_MESSAGE_COUNT = 100
+        private const val ONE_ON_ONE_MESSAGE_COUNT = 20
         private const val GROUP_MESSAGE_COUNT = 20
         private const val COMMUNITY_MESSAGE_COUNT = 3
 
@@ -68,21 +69,32 @@ class NetworkSendTest {
         private const val POLL_INTERVAL_MS = 200L
     }
 
-    @get:Rule val hiltRule = HiltAndroidRule(this)
+    @get:Rule
+    val hiltRule = HiltAndroidRule(this)
 
-    @Inject lateinit var loginStateRepository: LoginStateRepository
+    @Inject
+    lateinit var loginStateRepository: LoginStateRepository
 
-    @Inject lateinit var messageSenderProvider: Provider<MessageSender>
-    @Inject lateinit var snodeClockProvider: Provider<SnodeClock>
-    @Inject lateinit var storageProvider: Provider<Storage>
-    @Inject lateinit var jobQueueProvider: Provider<JobQueue>
-    @Inject lateinit var mmsSmsDatabaseProvider: Provider<MmsSmsDatabase>
-    @Inject lateinit var smsDatabaseProvider: Provider<SmsDatabase>
+    @Inject
+    lateinit var messageSenderProvider: Provider<MessageSender>
+    @Inject
+    lateinit var snodeClockProvider: Provider<SnodeClock>
+    @Inject
+    lateinit var storageProvider: Provider<Storage>
+    @Inject
+    lateinit var jobQueueProvider: Provider<JobQueue>
+    @Inject
+    lateinit var mmsSmsDatabaseProvider: Provider<MmsSmsDatabase>
+    @Inject
+    lateinit var smsDatabaseProvider: Provider<SmsDatabase>
 
-    @Inject lateinit var messagingModuleConfiguration: Provider<MessagingModuleConfiguration>
+    @Inject
+    lateinit var messagingModuleConfiguration: Provider<MessagingModuleConfiguration>
 
-    @Inject lateinit var recipientRepository: RecipientRepository
-    @Inject lateinit var mmsDatabaseProvider: Provider<MmsDatabase>
+    @Inject
+    lateinit var recipientRepository: RecipientRepository
+    @Inject
+    lateinit var mmsDatabaseProvider: Provider<MmsDatabase>
 
     // Resolved after we seed login state
     private lateinit var messageSender: MessageSender
@@ -94,7 +106,8 @@ class NetworkSendTest {
     private lateinit var mmsDb: MmsDatabase
     private lateinit var sendTestCollector: InMemorySendTestCollector
 
-    @Before fun setup() {
+    @Before
+    fun setup() {
         // SQLCipher relies on native libraries, but the test application does not run the normal app
         // initialization. We prepare anything the database needs here before injection happens.
         val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -108,7 +121,12 @@ class NetworkSendTest {
 
         // Explicitly load the SQLCipher native library before anything opens the database.
         runCatching { System.loadLibrary("sqlcipher") }
-            .onFailure { throw IllegalStateException("Failed to load SQLCipher native lib (sqlcipher)", it) }
+            .onFailure {
+                throw IllegalStateException(
+                    "Failed to load SQLCipher native lib (sqlcipher)",
+                    it
+                )
+            }
 
         // Perform injection on the main thread so any Android handlers created during setup
         // are attached to the main looper.
@@ -117,7 +135,8 @@ class NetworkSendTest {
         }
 
         // Generate a login state the same way the app normally would, but inside the test.
-        val phrase = "blender balding sabotage javelin cogs fetches duke fatal hitched village sensible oars sensible"
+        val phrase =
+            "blender balding sabotage javelin cogs fetches duke fatal hitched village sensible oars sensible"
 
         val codec = MnemonicCodec { fileName ->
             MnemonicUtilities.loadFileContents(context, fileName)
@@ -143,7 +162,11 @@ class NetworkSendTest {
                 storageProvider.get()
             } catch (t: Throwable) {
                 if (looksLikeSqlCipherWrongKeyOrCorruptDb(t)) {
-                    Log.w("NetworkSendTest", "Opening session.db failed; deleting and retrying once", t)
+                    Log.w(
+                        "NetworkSendTest",
+                        "Opening session.db failed; deleting and retrying once",
+                        t
+                    )
                     deleteSessionDb(context)
                     storageProvider.get()
                 } else {
@@ -181,7 +204,9 @@ class NetworkSendTest {
             val name = cur.javaClass.name
             if (
                 name.contains("SQLiteException") &&
-                (msg.contains("not a database") || msg.contains("file is not a database") || msg.contains("malformed"))
+                (msg.contains("not a database") || msg.contains("file is not a database") || msg.contains(
+                    "malformed"
+                ))
             ) return true
 
             cur = cur.cause
@@ -210,8 +235,14 @@ class NetworkSendTest {
             while (it.hasNext()) {
                 val id = it.next()
                 when (mmsSmsDb.getOutgoingTerminalState(id)) {
-                    MmsSmsDatabase.OutgoingTerminalState.SENT -> { sent += id; it.remove() }
-                    MmsSmsDatabase.OutgoingTerminalState.FAILED -> { failed += id; it.remove() }
+                    MmsSmsDatabase.OutgoingTerminalState.SENT -> {
+                        sent += id; it.remove()
+                    }
+
+                    MmsSmsDatabase.OutgoingTerminalState.FAILED -> {
+                        failed += id; it.remove()
+                    }
+
                     MmsSmsDatabase.OutgoingTerminalState.PENDING -> Unit
                 }
             }
@@ -329,11 +360,12 @@ class NetworkSendTest {
     private suspend fun insertAndSendImageMessage(
         threadId: Long,
         recipient: Address,
-        body: String,
+        body: String?,
         fileName: String = "test_upload.jpg",
         width: Int = 20,
         height: Int = 20,
         caption: String? = null,
+        deleteAttachmentFilesAfterSave: Boolean = false,
     ): MessageId {
         val attachments = createImageAttachments(
             context = InstrumentationRegistry.getInstrumentation().targetContext,
@@ -343,12 +375,14 @@ class NetworkSendTest {
             caption = caption,
         )
 
+        val sentTimestamp = snodeClock.currentTimeMillis()
+
         val message = VisibleMessage().applyExpiryMode(recipient).apply {
-            sentTimestamp = snodeClock.currentTimeMillis()
-            text = body
+            this.sentTimestamp = sentTimestamp
+            this.text = body
         }
 
-        val outgoing = OutgoingMediaMessage(
+        val outgoingMediaMessage = OutgoingMediaMessage(
             message = message,
             recipient = recipient,
             attachments = attachments,
@@ -360,7 +394,7 @@ class NetworkSendTest {
 
         val messageId = MessageId(
             id = mmsDb.insertMessageOutbox(
-                outgoing,
+                outgoingMediaMessage,
                 threadId,
                 false,
                 0,
@@ -371,14 +405,43 @@ class NetworkSendTest {
         message.id = messageId
         SendTestHooks.collector?.onEnqueued(messageId)
 
-        // Use the attachment-aware overload so attachment ids are reloaded from the MMS row.
+        if (deleteAttachmentFilesAfterSave) {
+            attachments
+                .asSequence()
+                .mapNotNull { attachment ->
+                    attachment.dataUri
+                        ?.takeIf { it.scheme == "file" }
+                        ?.path
+                        ?.let(::File)
+                }
+                .filter { it.exists() }
+                .forEach { it.delete() }
+        }
+
+        // Use the same attachment-aware overload as production so attachment ids are reloaded
+        // from the saved MMS row before the send pipeline continues.
         messageSender.send(message, recipient, null, null)
 
         return messageId
     }
 
-    @Test fun send_real_network_repeatable_user_nts() = runBlocking {
-        val recipient = Address.fromSerialized("05301f684ff55f168fcc270053788609c9a711751c5e636c4e587d804ae435a569")
+    private fun logSendReport(
+        name: String,
+        startTimeMs: Long,
+        showErrorsOnly: Boolean = true, // show only failed messages in Messages breakdown
+    ) {
+        val report = sendTestCollector.buildReport(
+            name = name,
+            startTimeMs = startTimeMs,
+            showErrorsOnly = showErrorsOnly
+        )
+        Log.i("NetworkSendTest", "\n$report")
+    }
+
+    @Test
+    fun send_real_network_repeatable_user_nts() = runBlocking {
+        val recipient =
+            Address.fromSerialized("05301f684ff55f168fcc270053788609c9a711751c5e636c4e587d804ae435a569")
 
         // ensure thread exists
         val threadId = storage.getOrCreateThreadIdFor(recipient)
@@ -401,147 +464,162 @@ class NetworkSendTest {
             pollMs = POLL_INTERVAL_MS
         )
 
-        val report = sendTestCollector.buildReport(
+        logSendReport(
             name = "send_real_network_repeatable_user_nts",
             startTimeMs = testStartTimeMs,
         )
-        Log.i("NetworkSendTest", report.toString())
-        Log.i("NetworkSendTest", "NTS attempted=${summary.attempted} sent=${summary.sent.size} failed=${summary.failed.size}")
         if (summary.failed.isNotEmpty()) {
             throw AssertionError("NTS failed message ids: ${summary.failed.map { it.id }}")
         }
     }
 
-//    @Test fun send_real_network_repeatable_one_on_one() = runBlocking {
-//        val recipient = Address.fromSerialized("0507012662d6972db5ba1f1f6e5501e3b6c6651c10c593d44153546c69fbe77322")
-//
-//        // ensure thread exists
-//        val threadId = storage.getOrCreateThreadIdFor(recipient)
-//        sendTestCollector.reset()
-//        val testStartTimeMs = System.currentTimeMillis()
-//
-//        val messageIds = withTimeout(LONG_EXECUTION_TIMEOUT_MS) {
-//            insertAndSendTextBatch(
-//                threadId = threadId,
-//                recipient = recipient,
-//                count = ONE_ON_ONE_MESSAGE_COUNT,
-//                delayBetweenMessagesMs = DEFAULT_DELAY_MS,
-//                prefix = "hello from NetworkSendTest 1:1",
-//            )
-//        }
-//
-//        val summary = awaitTerminalStates(
-//            ids = messageIds,
-//            timeoutMs = LONG_AWAIT_TIMEOUT_MS,
-//            pollMs = POLL_INTERVAL_MS
-//        )
-//
-//        val report = sendTestCollector.buildReport(
-//            name = "send_real_network_repeatable_one_on_one",
-//            startTimeMs = testStartTimeMs,
-//        )
-//        Log.i("NetworkSendTest", report.toString())
-//        Log.i("NetworkSendTest", "1:1 attempted=${summary.attempted} sent=${summary.sent.size} failed=${summary.failed.size}")
-//        if (summary.failed.isNotEmpty()) {
-//            throw AssertionError("1:1 failed message ids: ${summary.failed.map { it.id }}")
-//        }
-//    }
+    @Test
+    fun send_real_network_repeatable_one_on_one() = runBlocking {
+        val recipient =
+            Address.fromSerialized("0507012662d6972db5ba1f1f6e5501e3b6c6651c10c593d44153546c69fbe77322")
 
-//    @Test fun send_real_network_repeatable_group() = runBlocking {
-//        val recipient = Address.fromSerialized("034ccd4890302d625eac887b660403140d9a8e131cda797d77d44bec8d5111bc24")
-//
-//        // ensure thread exists
-//        val threadId = storage.getOrCreateThreadIdFor(recipient)
-//        sendTestCollector.reset()
-//        val testStartTimeMs = System.currentTimeMillis()
-//
-//        val messageIds = withTimeout(LONG_EXECUTION_TIMEOUT_MS) {
-//            insertAndSendTextBatch(
-//                threadId = threadId,
-//                recipient = recipient,
-//                count = GROUP_MESSAGE_COUNT,
-//                delayBetweenMessagesMs = DEFAULT_DELAY_MS,
-//                prefix = "hello from NetworkSendTest Group",
-//            )
-//        }
-//
-//        val summary = awaitTerminalStates(
-//            ids = messageIds,
-//            timeoutMs = DEFAULT_AWAIT_TIMEOUT_MS,
-//            pollMs = POLL_INTERVAL_MS
-//        )
-//
-//        val report = sendTestCollector.buildReport(
-//            name = "send_real_network_repeatable_group",
-//            startTimeMs = testStartTimeMs,
-//        )
-//        Log.i("NetworkSendTest", report.toString())
-//        Log.i("NetworkSendTest", "Group attempted=${summary.attempted} sent=${summary.sent.size} failed=${summary.failed.size}")
-//        if (summary.failed.isNotEmpty()) {
-//            throw AssertionError("Group failed message ids: ${summary.failed.map { it.id }}")
-//        }
-//    }
+        // ensure thread exists
+        val threadId = storage.getOrCreateThreadIdFor(recipient)
+        sendTestCollector.reset()
+        val testStartTimeMs = System.currentTimeMillis()
 
-//    @Test fun send_real_network_repeatable_community() = runBlocking {
-//        val recipient = Address.fromSerialized("community://https%3A%2F%2Ftest-chat.session.codes?room=testing-all-the-things")
-//
-//        // ensure thread exists
-//        val threadId = storage.getOrCreateThreadIdFor(recipient)
-//
-//        val messageIds = withTimeout(DEFAULT_EXECUTION_TIMEOUT_MS) {
-//            insertAndSendTextBatch(
-//                threadId = threadId,
-//                recipient = recipient,
-//                count = COMMUNITY_MESSAGE_COUNT,
-//                delayBetweenMessagesMs = DEFAULT_DELAY_MS,
-//                prefix = "test community",
-//            )
-//        }
-//
-//        val summary = awaitTerminalStates(
-//            ids = messageIds,
-//            timeoutMs = DEFAULT_AWAIT_TIMEOUT_MS,
-//            pollMs = POLL_INTERVAL_MS
-//        )
-//
-//        Log.i("NetworkSendTest", "Community attempted=${summary.attempted} sent=${summary.sent.size} failed=${summary.failed.size}")
-//        if (summary.failed.isNotEmpty()) {
-//            throw AssertionError("Community failed message ids: ${summary.failed.map { it.id }}")
-//        }
-//    }
+        val messageIds = withTimeout(LONG_EXECUTION_TIMEOUT_MS) {
+            insertAndSendTextBatch(
+                threadId = threadId,
+                recipient = recipient,
+                count = ONE_ON_ONE_MESSAGE_COUNT,
+                delayBetweenMessagesMs = DEFAULT_DELAY_MS,
+                prefix = "hello from NetworkSendTest 1:1",
+            )
+        }
+
+        val summary = awaitTerminalStates(
+            ids = messageIds,
+            timeoutMs = LONG_AWAIT_TIMEOUT_MS,
+            pollMs = POLL_INTERVAL_MS
+        )
+
+        logSendReport(
+            name = "send_real_network_repeatable_one_on_one",
+            startTimeMs = testStartTimeMs,
+            showErrorsOnly = false
+        )
+        if (summary.failed.isNotEmpty()) {
+            throw AssertionError("1:1 failed message ids: ${summary.failed.map { it.id }}")
+        }
+    }
+
+    @Test
+    fun send_real_network_repeatable_group() = runBlocking {
+        val recipient =
+            Address.fromSerialized("034ccd4890302d625eac887b660403140d9a8e131cda797d77d44bec8d5111bc24")
+
+        // ensure thread exists
+        val threadId = storage.getOrCreateThreadIdFor(recipient)
+        sendTestCollector.reset()
+        val testStartTimeMs = System.currentTimeMillis()
+
+        val messageIds = withTimeout(LONG_EXECUTION_TIMEOUT_MS) {
+            insertAndSendTextBatch(
+                threadId = threadId,
+                recipient = recipient,
+                count = GROUP_MESSAGE_COUNT,
+                delayBetweenMessagesMs = DEFAULT_DELAY_MS,
+                prefix = "hello from NetworkSendTest Group",
+            )
+        }
+
+        val summary = awaitTerminalStates(
+            ids = messageIds,
+            timeoutMs = DEFAULT_AWAIT_TIMEOUT_MS,
+            pollMs = POLL_INTERVAL_MS
+        )
+
+        logSendReport(
+            name = "send_real_network_repeatable_group",
+            startTimeMs = testStartTimeMs,
+        )
+        if (summary.failed.isNotEmpty()) {
+            throw AssertionError("Group failed message ids: ${summary.failed.map { it.id }}")
+        }
+    }
+
+    @Test
+    fun send_real_network_repeatable_community() = runBlocking {
+        val recipient =
+            Address.fromSerialized("community://https%3A%2F%2Ftest-chat.session.codes?room=testing-all-the-things")
+
+        // ensure thread exists
+        val threadId = storage.getOrCreateThreadIdFor(recipient)
+        sendTestCollector.reset()
+        val testStartTimeMs = System.currentTimeMillis()
+
+        val messageIds = withTimeout(DEFAULT_EXECUTION_TIMEOUT_MS) {
+            insertAndSendTextBatch(
+                threadId = threadId,
+                recipient = recipient,
+                count = COMMUNITY_MESSAGE_COUNT,
+                delayBetweenMessagesMs = DEFAULT_DELAY_MS,
+                prefix = "test community",
+            )
+        }
+
+        val summary = awaitTerminalStates(
+            ids = messageIds,
+            timeoutMs = DEFAULT_AWAIT_TIMEOUT_MS,
+            pollMs = POLL_INTERVAL_MS
+        )
+
+        logSendReport(
+            name = "send_real_network_repeatable_community",
+            startTimeMs = testStartTimeMs,
+        )
+        if (summary.failed.isNotEmpty()) {
+            throw AssertionError("Community failed message ids: ${summary.failed.map { it.id }}")
+        }
+    }
 
     // ATTACHMENT SENDING
 
-//    @Test fun send_real_network_single_image_one_on_one() = runBlocking {
-//        val recipient = Address.fromSerialized("0507012662d6972db5ba1f1f6e5501e3b6c6651c10c593d44153546c69fbe77322")
-//
-//        val threadId = storage.getOrCreateThreadIdFor(recipient)
-//
-//        val messageId = withTimeout(LONG_EXECUTION_TIMEOUT_MS) {
-//            insertAndSendImageMessage(
-//                threadId = threadId,
-//                recipient = recipient,
-//                body = "image upload test X",
-//                fileName = "single_upload_test.jpg",
-//                width = 20,
-//                height = 20,
-//                caption = "test caption",
-//            )
-//        }
+    @Test
+    fun send_real_network_single_image_one_on_one() = runBlocking {
+        val recipient =
+            Address.fromSerialized("0507012662d6972db5ba1f1f6e5501e3b6c6651c10c593d44153546c69fbe77322")
 
-//        val summary = awaitTerminalStates(
-//            ids = listOf(messageId),
-//            timeoutMs = LONG_AWAIT_TIMEOUT_MS,
-//            pollMs = POLL_INTERVAL_MS
-//        )
-//
-//        Log.i(
-//            "NetworkSendTest",
-//            "Single image attempted=${summary.attempted} sent=${summary.sent.size} failed=${summary.failed.size}"
-//        )
-//
-//        if (summary.failed.isNotEmpty()) {
-//            throw AssertionError("Single image failed message ids: ${summary.failed.map { it.id }}")
-//        }
-//    }
+        val threadId = storage.getOrCreateThreadIdFor(recipient)
+        sendTestCollector.reset()
+        val testStartTimeMs = System.currentTimeMillis()
+
+        Log.d("~~~~NETWORKSENDIMAGE", "~~~~~")
+        val messageId = withTimeout(LONG_EXECUTION_TIMEOUT_MS) {
+            insertAndSendImageMessage(
+                threadId = threadId,
+                recipient = recipient,
+                body = "image upload test X",
+                fileName = "single_upload_test.jpg",
+                width = 20,
+                height = 20,
+                caption = "test caption",
+            )
+        }
+
+        val summary = awaitTerminalStates(
+            ids = listOf(messageId),
+            timeoutMs = LONG_AWAIT_TIMEOUT_MS,
+            pollMs = POLL_INTERVAL_MS
+        )
+
+        logSendReport(
+            name = "send_real_network_single_image_one_on_one",
+            startTimeMs = testStartTimeMs,
+        )
+        if (summary.failed.isNotEmpty()) {
+            throw AssertionError("Single image failed message ids: ${summary.failed.map { it.id }}")
+        }
+    }
+
+    @After
+    fun tearDown() {
+        SendTestHooks.collector = null
+    }
 }

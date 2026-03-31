@@ -15,6 +15,7 @@ data class SendTestReport(
     val results: List<SendTestResult>,
     val startTimeMs: Long,
     val endTimeMs: Long,
+    val showErrorsOnly: Boolean,
 ) {
 
     private val successCount = results.count { it.success }
@@ -65,6 +66,23 @@ data class SendTestReport(
             }
     }
 
+    private fun perMessageBreakdown(): String {
+        val items = if (showErrorsOnly) results.filterNot { it.success } else results
+        if (items.isEmpty()) return "\n  (No matching message results)"
+
+        return "\n" + items.joinToString("\n") { result ->
+            val status = if (result.success) "SUCCESS" else "FAILED"
+            val errorText = result.error?.let { "\n      error=${classifyError(it)}" } ?: ""
+
+            """
+              - messageId=${result.messageId.id}
+                  status=$status
+                  retries=${result.retryCount}
+                  latency=${String.format("%.3fs", result.latencyMs / 1000.0)}$errorText
+            """.trimEnd()
+        }
+    }
+
     override fun toString(): String {
         val total = results.size
         val successRate = if (total == 0) 0.0 else successCount.toDouble() / total
@@ -83,6 +101,7 @@ data class SendTestReport(
               - Min: ${String.format("%.3fs", minLatency / 1000.0)}
               - Max: ${String.format("%.3fs", maxLatency / 1000.0)}
               - Total: ${String.format("%.3fs", (endTimeMs - startTimeMs) / 1000.0)}
+            Messages:${perMessageBreakdown()}
         """.trimIndent()
     }
 }

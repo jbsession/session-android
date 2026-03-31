@@ -90,6 +90,7 @@ class InMemorySendTestCollector : SendTestEventCollector {
         name: String,
         startTimeMs: Long,
         endTimeMs: Long = System.currentTimeMillis(),
+        showErrorsOnly: Boolean = true,
     ): SendTestReport {
         val now = System.currentTimeMillis()
         val results = metrics.values
@@ -101,6 +102,7 @@ class InMemorySendTestCollector : SendTestEventCollector {
             results = results,
             startTimeMs = startTimeMs,
             endTimeMs = endTimeMs,
+            showErrorsOnly = showErrorsOnly
         )
     }
 
