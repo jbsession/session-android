@@ -55,6 +55,7 @@ class NetworkSendTest {
         private const val ONE_ON_ONE_MESSAGE_COUNT = 20
         private const val GROUP_MESSAGE_COUNT = 20
         private const val COMMUNITY_MESSAGE_COUNT = 3
+        private const val IMAGE_MESSAGE_COUNT = 10
 
         // Delays
         private const val DEFAULT_DELAY_MS = 250L
@@ -425,6 +426,40 @@ class NetworkSendTest {
         return messageId
     }
 
+    private suspend fun insertAndSendImageBatch(
+        threadId: Long,
+        recipient: Address,
+        count: Int,
+        bodyPrefix: String,
+        fileNamePrefix: String = "test_upload",
+        width: Int = 20,
+        height: Int = 20,
+        captionPrefix: String? = null,
+        delayBetweenMessagesMs: Long,
+        deleteAttachmentFilesAfterSave: Boolean = false,
+    ): List<MessageId> {
+        val ids = ArrayList<MessageId>(count)
+
+        repeat(count) { i ->
+            val messageId = insertAndSendImageMessage(
+                threadId = threadId,
+                recipient = recipient,
+                body = "$bodyPrefix #${i + 1}",
+                fileName = "${fileNamePrefix}_${i + 1}.jpg",
+                width = width,
+                height = height,
+                caption = captionPrefix?.let { "$it #${i + 1}" },
+                deleteAttachmentFilesAfterSave = deleteAttachmentFilesAfterSave,
+            )
+
+            ids += messageId
+
+            if (delayBetweenMessagesMs > 0) delay(delayBetweenMessagesMs)
+        }
+
+        return ids
+    }
+
     private fun logSendReport(
         name: String,
         startTimeMs: Long,
@@ -582,39 +617,39 @@ class NetworkSendTest {
     // ATTACHMENT SENDING
 
     @Test
-    fun send_real_network_single_image_one_on_one() = runBlocking {
+    fun send_real_network_repeatable_image_one_on_one() = runBlocking {
         val recipient =
             Address.fromSerialized("0507012662d6972db5ba1f1f6e5501e3b6c6651c10c593d44153546c69fbe77322")
 
         val threadId = storage.getOrCreateThreadIdFor(recipient)
         sendTestCollector.reset()
         val testStartTimeMs = System.currentTimeMillis()
-
-        Log.d("~~~~NETWORKSENDIMAGE", "~~~~~")
-        val messageId = withTimeout(LONG_EXECUTION_TIMEOUT_MS) {
-            insertAndSendImageMessage(
+        val messageIds = withTimeout(LONG_EXECUTION_TIMEOUT_MS) {
+            insertAndSendImageBatch(
                 threadId = threadId,
                 recipient = recipient,
-                body = "image upload test X",
-                fileName = "single_upload_test.jpg",
+                count = IMAGE_MESSAGE_COUNT,
+                bodyPrefix = "image upload test",
+                fileNamePrefix = "repeatable_upload_test",
                 width = 20,
                 height = 20,
-                caption = "test caption",
+                captionPrefix = "test caption",
+                delayBetweenMessagesMs = DEFAULT_DELAY_MS,
             )
         }
 
         val summary = awaitTerminalStates(
-            ids = listOf(messageId),
+            ids = messageIds,
             timeoutMs = LONG_AWAIT_TIMEOUT_MS,
             pollMs = POLL_INTERVAL_MS
         )
 
         logSendReport(
-            name = "send_real_network_single_image_one_on_one",
+            name = "send_real_network_repeatable_image_one_on_one",
             startTimeMs = testStartTimeMs,
         )
         if (summary.failed.isNotEmpty()) {
-            throw AssertionError("Single image failed message ids: ${summary.failed.map { it.id }}")
+            throw AssertionError("Repeatable image failed message ids: ${summary.failed.map { it.id }}")
         }
     }
 
