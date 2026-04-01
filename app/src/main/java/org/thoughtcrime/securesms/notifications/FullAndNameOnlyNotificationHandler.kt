@@ -17,6 +17,7 @@ import org.session.libsession.utilities.StringSubstitutionConstants
 import org.session.libsession.utilities.recipients.Recipient
 import org.session.libsession.utilities.recipients.effectiveNotifyType
 import org.session.libsignal.utilities.Log
+import org.thoughtcrime.securesms.auth.LoginStateRepository
 import org.thoughtcrime.securesms.conversation.v2.messages.MessageFormatter
 import org.thoughtcrime.securesms.conversation.v2.utilities.MentionUtilities
 import org.thoughtcrime.securesms.database.MmsDatabase
@@ -45,16 +46,17 @@ import javax.inject.Singleton
 import kotlin.math.max
 
 /**
- * Handles notifications in [NotificationPrivacy.ShowNameAndContent] mode.
+ * Handles notifications in [NotificationPrivacy.ShowNameAndContent]/[NotificationPrivacy.ShowNameOnly] mode.
  *
- * Shows one per-thread notification with the sender's name, avatar, and full message body,
+ * Shows one per-thread notification with the sender's name, avatar, and full message body if turned on,
  * using [NotificationCompat.MessagingStyle]. Reactions are also included.
  */
 @Singleton
-class FullNotificationHandler @Inject constructor(
+class FullAndNameOnlyNotificationHandler @Inject constructor(
     @ApplicationContext context: Context,
     threadDb: ThreadDatabase,
     private val mmsSmsDatabase: MmsSmsDatabase,
+    private val loginStateRepository: LoginStateRepository,
     private val mmsDatabase: MmsDatabase,
     private val smsDatabase: SmsDatabase,
     recipientRepository: RecipientRepository,
@@ -228,7 +230,11 @@ class FullNotificationHandler @Inject constructor(
             // No reactions for communities are notified...
             emptyList()
         } else {
-            reactionDatabase.getReactionsForThread(threadId, threadLastSeen)
+            reactionDatabase.getIncomingReactionsForMyMessages(
+                threadId = threadId,
+                minSendTimeMsExclusive = threadLastSeen,
+                myId = loginStateRepository.requireLocalAccountId()
+            )
         }
 
         Log.d(TAG, "threadId=$threadId: found ${newMessages.size} message(s), ${newReactions.size} reaction(s) since lastSeen=$threadLastSeen")
@@ -263,17 +269,25 @@ class FullNotificationHandler @Inject constructor(
             ArrayList<NotificationCompat.MessagingStyle.Message>(newMessages.size + newReactions.size)
         val personCache = arrayMapOf<Address, Person>()
 
+        val nameOnlyMessageContent = if (prefs[NotificationPreferences.PRIVACY] == NotificationPrivacy.ShowNameOnly) {
+            context.resources.getQuantityText(R.plurals.messageNew, 1)
+        } else {
+            null
+        }
+
         for (msg in newMessages) {
+            val text = nameOnlyMessageContent ?: MentionUtilities.parseAndSubstituteMentions(
+                recipientRepository = recipientRepository,
+                input = nameOnlyMessageContent ?: messageFormatter.formatMessageBodyForNotification(
+                    context,
+                    msg,
+                    threadRecipient
+                ),
+                context = context
+            ).text
+
             messages += NotificationCompat.MessagingStyle.Message(
-                MentionUtilities.parseAndSubstituteMentions(
-                    recipientRepository = recipientRepository,
-                    input = messageFormatter.formatMessageBodyForNotification(
-                        context,
-                        msg,
-                        threadRecipient
-                    ),
-                    context = context
-                ).text,
+                text,
                 msg.dateSent,
                 msg.toPerson(personCache)
             )
@@ -311,7 +325,6 @@ class FullNotificationHandler @Inject constructor(
             threadAddress = threadAddress,
             threadRecipient = threadRecipient,
             threadId = threadId,
-            latestMessageTimestampMs = latestMessageTimestampMs,
             messages = messages,
             canReply = true,
             silent = updateOnly
@@ -327,11 +340,9 @@ class FullNotificationHandler @Inject constructor(
         lastPostedMessageTimestampByThreadId: MutableLongLongMap
     ) {
         Log.d(TAG, "threadId=$threadId: notifyType=MENTIONS ")
-        // The rule for a mentions only thread is: we'll notify the user only if the user is MENTIONED in
-        // the newly added message, but once we are notifying the user, we show all new messages,
-        // not only the mentioned ones. i.e. the mention is only a trigger
 
         val allNewMessages = mmsSmsDatabase.getIncomingMessagesSorted(threadId, threadLastSeen)
+            .filter { MentionUtilities.mentionsMe(it.body, recipientRepository) }
 
         if (allNewMessages.isEmpty()) {
             Log.d(TAG, "threadId=$threadId: no new messages — cancelling notification")
@@ -339,19 +350,9 @@ class FullNotificationHandler @Inject constructor(
             return
         }
 
-        // Now we need to inspect the unnotified new messages for any mentions
-        val lastPostedLatestMessageTimestamp = lastPostedMessageTimestampByThreadId.getOrDefault(threadId, 0L)
-        val unnotifiedMessagesContainMentions = allNewMessages.any { it.dateSent > lastPostedLatestMessageTimestamp &&
-                MentionUtilities.mentionsMe(it.body, recipientRepository) }
-
-        if (!unnotifiedMessagesContainMentions) {
-            Log.d(TAG, "threadId=$threadId: no new self-mention messages, ignoring")
-            return
-        }
-
         doNotify(
             newMessages = allNewMessages,
-            newReactions = reactionDatabase.getReactionsForThread(threadId, threadLastSeen),
+            newReactions = emptyList(),
             threadRecipient = threadRecipient,
             lastPostedMessageTimestampByThreadId = lastPostedMessageTimestampByThreadId,
             threadId = threadId,
@@ -394,7 +395,6 @@ class FullNotificationHandler @Inject constructor(
             threadAddress = threadAddress,
             threadRecipient = threadRecipient,
             threadId = threadId,
-            latestMessageTimestampMs = newMessage.dateSent,
             messages = listOf(
                 NotificationCompat.MessagingStyle.Message(
                     context.getText(R.string.messageRequestsNew),
