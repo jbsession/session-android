@@ -1,4 +1,41 @@
+
 package org.thoughtcrime.securesms.message_sending
+
+/**
+ * Real-network instrumentation test for Session message sending.
+ *
+ * What this test does:
+ * - Seeds a logged-in state inside the test process.
+ * - Resolves real app singletons used by the send pipeline.
+ * - Inserts outgoing SMS/MMS rows into the database.
+ * - Triggers the real send pipeline through [MessageSender].
+ * - Polls the database until each message reaches a terminal state.
+ * - Logs a send report for basic debugging and manual verification.
+ *
+ * Coverage in this file:
+ * - Repeatable one-to-one text sends.
+ * - Repeatable closed-group text sends.
+ * - Repeatable community text sends.
+ * - Repeatable note-to-self text sends.
+ * - Repeatable one-to-one image sends.
+ *
+ * Important limitations:
+ * - This is not a hermetic or deterministic test. It depends on real network access,
+ *   real service availability, valid recipients, local device state, and timing.
+ * - Failures can be caused by transport issues, service-side issues, rate limits,
+ *   attachment upload problems, account state, or device/environment instability.
+ * - It is intended for local/manual validation and debugging, not as a stable CI test.
+ * - The recipient addresses in this file are fixed test targets and must be treated as
+ *   real destinations.
+ * - Running this test sends actual messages and may create message history/spam on the
+ *   receiving side.
+ *
+ * WARNING:
+ * - Do not merge or PR this file to the main repository as-is.
+ * - Keep this test local or in a private/debug-only workflow to avoid accidental message spam,
+ *   noisy test traffic, and unintended use of real infrastructure from shared branches/CI.
+ */
+
 
 import android.graphics.Bitmap
 import java.io.File
