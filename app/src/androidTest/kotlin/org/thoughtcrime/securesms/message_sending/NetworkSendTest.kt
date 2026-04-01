@@ -55,7 +55,7 @@ class NetworkSendTest {
         private const val ONE_ON_ONE_MESSAGE_COUNT = 20
         private const val GROUP_MESSAGE_COUNT = 20
         private const val COMMUNITY_MESSAGE_COUNT = 3
-        private const val IMAGE_MESSAGE_COUNT = 10
+        private const val IMAGE_MESSAGE_COUNT = 20
 
         // Delays
         private const val DEFAULT_DELAY_MS = 250L
