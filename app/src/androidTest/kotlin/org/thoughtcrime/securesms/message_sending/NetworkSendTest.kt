@@ -1,4 +1,3 @@
-
 package org.thoughtcrime.securesms.message_sending
 
 /**
@@ -18,6 +17,14 @@ package org.thoughtcrime.securesms.message_sending
  * - Repeatable community text sends.
  * - Repeatable note-to-self text sends.
  * - Repeatable one-to-one image sends.
+ *
+ * Seeded account requirements:
+ * - The seeded mnemonic must belong to an existing Session account, not a newly generated one.
+ * - That account must already be usable on the real network and able to complete normal sends.
+ * - It must already have accepted one-to-one contacts for the direct-message scenarios in this file.
+ * - It must already be a member of the target closed groups and communities used by these tests.
+ * - If the seeded account is missing those relationships, the tests may fail even when the send
+ *   pipeline itself is working correctly.
  *
  * Important limitations:
  * - This is not a hermetic or deterministic test. It depends on real network access,
